@@ -3,8 +3,12 @@ title: Release notes and channels
 description: What changed between two versions, and stable versus beta.
 ---
 
-Not implemented yet. This page describes the intended design.
+`Update.find` takes the installed version and the releases of a source. If one is newer, it returns an `Update`: `latest()` is the release to update to, and `releases()` lists every release newer than the installed one, newest first, each with its version, title, date and notes as Markdown. An app that skipped versions so sees everything that changed since, not only the newest notes. Build metadata does not count: `1.0.0+5` is not newer than `1.0.0`.
 
-When an update is found, the library collects the release notes of every version between the installed one and the new one, not only the newest. Notes are Markdown. If they use headings such as Added, Fixed and Breaking, the library splits them into those sections, so that an app can, for example, show breaking changes first. A changelog file in the repository can serve instead of per-release notes.
+For now pre-releases are left out.
 
-Each version belongs to a channel: stable or beta. A pre-release version (`1.2.0-beta.1`) is beta. An app on the stable channel sees only stable versions; an app on the beta channel sees both.
+## Not implemented yet
+
+Notes that use headings such as Added, Fixed and Breaking are meant to be split into those sections, so that an app can, for example, show breaking changes first. A changelog file in the repository may serve instead of per-release notes.
+
+Each version is meant to belong to a channel: stable or beta. A pre-release version (`1.2.0-beta.1`) is beta. An app on the stable channel sees only stable versions; an app on the beta channel sees both.

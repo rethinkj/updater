@@ -1,0 +1,1 @@
+- Added `Update.find`, which finds the newest release after the installed version and lists every release in between, newest first, with its notes. Pre-releases are left out.
