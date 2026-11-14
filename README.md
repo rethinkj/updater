@@ -12,6 +12,8 @@ Nothing is implemented yet. The version is `0.1.0-SNAPSHOT`. It targets Windows 
 
 ## What it is meant to do
 
+It is headless: it shows nothing itself, and hands the app objects (versions, release notes, progress, results) to show the way the app wants.
+
 - **Find updates**: releases from GitHub, GitLab, Gitea and Forgejo, or from a JSON manifest; stable and beta channels; versions compared by SemVer, pre-releases included.
 - **Read release notes**: the notes of every version between the installed one and the new one, as Markdown and split into sections such as Added, Fixed and Breaking.
 - **Download and verify**: into a temporary file, checked against a SHA-256 checksum and, if the app configures a public key, an Ed25519 signature.
