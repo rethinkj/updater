@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.time.Instant;
@@ -28,7 +27,7 @@ class GitHubSourceTest {
 
   @BeforeEach
   void start() throws IOException {
-    server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     api = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/api/v3");
     // Two pages of recorded releases, linked in two Link fields with "next" in the second, given
     // as only a query.
@@ -133,6 +132,20 @@ class GitHubSourceTest {
           RateLimitException.class,
           () -> new GitHubSource(api, repository, null).releases(),
           repository);
+    }
+  }
+
+  @Test
+  void sendsNoTokenOverPlainHttpToAnotherMachine() {
+    for (String api : List.of("http://ghe.example.com/api/v3", "http://127.example.com/")) {
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> new GitHubSource(URI.create(api), "a/b", "test-token"),
+          api);
+    }
+    for (String api :
+        List.of("http://LOCALHOST:8080/", "http://127.0.0.2/", "http://[0:0:0:0:0:0:0:1]/")) {
+      new GitHubSource(URI.create(api), "a/b", "test-token");
     }
   }
 
