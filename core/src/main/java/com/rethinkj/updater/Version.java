@@ -21,18 +21,35 @@ import java.util.regex.Pattern;
 public record Version(int major, int minor, int patch, List<String> preRelease, String build)
     implements Comparable<Version> {
 
+  private static final String IDENTIFIER = "(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)";
+  private static final String BUILD = "[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*";
+  private static final Pattern IDENTIFIER_PATTERN = Pattern.compile(IDENTIFIER);
+  private static final Pattern BUILD_PATTERN = Pattern.compile(BUILD);
+
   // The pattern semver.org recommends, with an optional "v" before it, as in Git tags.
   private static final Pattern SEMVER =
       Pattern.compile("[vV]?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)"
-          + "(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?"
-          + "(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?");
+          + "(?:-(" + IDENTIFIER + "(?:\\." + IDENTIFIER + ")*))?"
+          + "(?:\\+(" + BUILD + "))?");
 
+  /**
+   * @throws IllegalArgumentException if a number is negative, or an identifier or the build
+   *     metadata is not valid SemVer
+   */
   public Version {
     if (major < 0 || minor < 0 || patch < 0) {
       throw new IllegalArgumentException("Version numbers must not be negative");
     }
     preRelease = List.copyOf(preRelease);
+    for (String id : preRelease) {
+      if (!IDENTIFIER_PATTERN.matcher(id).matches()) {
+        throw new IllegalArgumentException("Not a SemVer pre-release identifier: \"" + id + "\"");
+      }
+    }
     Objects.requireNonNull(build, "build");
+    if (!build.isEmpty() && !BUILD_PATTERN.matcher(build).matches()) {
+      throw new IllegalArgumentException("Not SemVer build metadata: \"" + build + "\"");
+    }
   }
 
   /**

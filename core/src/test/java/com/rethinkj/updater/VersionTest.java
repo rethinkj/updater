@@ -22,6 +22,8 @@ class VersionTest {
         "1.0.0-beta.11",
         "1.0.0-rc.1",
         "1.0.0-rc.1.99999999999999999999",
+        "1.0.0-rc.1.100000000000000000000",
+        "1.0.0-rc.1.100000000000000000001",
         "1.0.0",
         "1.9.0",
         "1.10.0",
@@ -53,5 +55,9 @@ class VersionTest {
       assertTrue(e.getMessage().contains("\"" + text + "\""), e.getMessage());
     }
     assertThrows(IllegalArgumentException.class, () -> Version.parse("99999999999.0.0"));
+    // The constructor holds to the same rules, so a version's text reads back as the same version.
+    assertThrows(IllegalArgumentException.class, () -> new Version(1, 0, 0, List.of("a.b"), ""));
+    assertThrows(IllegalArgumentException.class, () -> new Version(1, 0, 0, List.of("01"), ""));
+    assertThrows(IllegalArgumentException.class, () -> new Version(1, 0, 0, List.of(), "a..b"));
   }
 }
