@@ -1,0 +1,17 @@
+# deps
+/node_modules
+
+# generated content
+.source
+/public/logo.svg
+/content/docs/reference/changelog.md
+
+# build
+/.next/
+/out/
+*.tsbuildinfo
+next-env.d.ts
+
+# misc
+.DS_Store
+npm-debug.log*

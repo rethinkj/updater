@@ -1,0 +1,11 @@
+{
+  "title": "rethinkj Updater",
+  "description": "A Java 25 library that finds, downloads, verifies and applies updates of desktop apps.",
+  "root": true,
+  "pages": [
+    "index",
+    "get-started",
+    "concepts",
+    "reference"
+  ]
+}

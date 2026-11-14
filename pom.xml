@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- child.*.inherit.append.path=false: Maven would otherwise append each module's artifactId to the inherited URLs. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd"
+         child.project.url.inherit.append.path="false">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.rethinkj.updater</groupId>
+  <artifactId>rethinkj-updater-parent</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>rethinkj Updater</name>
+  <description>Checks, downloads, verifies and applies updates of Java apps on Windows and Linux.</description>
+  <url>https://github.com/rethinkj/updater</url>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/license/mit</url>
+    </license>
+  </licenses>
+
+  <scm child.scm.connection.inherit.append.path="false"
+       child.scm.developerConnection.inherit.append.path="false"
+       child.scm.url.inherit.append.path="false">
+    <connection>scm:git:https://github.com/rethinkj/updater.git</connection>
+    <developerConnection>scm:git:git@github.com:rethinkj/updater.git</developerConnection>
+    <url>https://github.com/rethinkj/updater</url>
+  </scm>
+
+  <!-- SNAPSHOTs go to the Central Portal's snapshot repository, which the CI deploys to from
+       main (.github/workflows/build.yml); there is no release repository yet. -->
+  <distributionManagement>
+    <snapshotRepository>
+      <id>central-snapshots</id>
+      <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+    </snapshotRepository>
+  </distributionManagement>
+
+  <modules>
+    <module>core</module>
+    <module>helper</module>
+    <module>examples</module>
+  </modules>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>25</maven.compiler.release>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>6.1.3</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <!-- Pinned so that every Maven version builds with the same plugins. -->
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>3.5.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>3.5.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.16.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.6.1</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>3.5.1</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>3.2.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>3.2.0</version>
+          <configuration>
+            <!-- Nothing goes up unless every module of the reactor has built. -->
+            <deployAtEnd>true</deployAtEnd>
+          </configuration>
+        </plugin>
+        <plugin>
+          <!-- A JAR of the sources beside the classes, for IDEs; core and helper declare it. -->
+          <artifactId>maven-source-plugin</artifactId>
+          <version>3.4.0</version>
+          <executions>
+            <execution>
+              <id>attach-sources</id>
+              <goals>
+                <goal>jar-no-fork</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+    <plugins>
+      <plugin>
+        <!-- The format of all Java code: mvn spotless:apply writes it, and verify fails on a
+             file that is not in it. -->
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>3.11.0</version>
+        <configuration>
+          <java>
+            <includes>
+              <include>src/*/java/**/*.java</include>
+              <include>scripts/*.java</include>
+            </includes>
+            <palantirJavaFormat>
+              <version>2.103.0</version>
+              <!-- Palantir's breaking of call chains with Google's two spaces and 100 columns. -->
+              <style>GOOGLE</style>
+            </palantirJavaFormat>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>verify</phase>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

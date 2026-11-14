@@ -1,0 +1,10 @@
+---
+title: Release notes and channels
+description: What changed between two versions, and stable versus beta.
+---
+
+Not implemented yet. This page describes the intended design.
+
+When an update is found, the library collects the release notes of every version between the installed one and the new one, not only the newest. Notes are Markdown. If they use headings such as Added, Fixed and Breaking, the library splits them into those sections, so that an app can, for example, show breaking changes first. A changelog file in the repository can serve instead of per-release notes.
+
+Each version belongs to a channel: stable or beta. A pre-release version (`1.2.0-beta.1`) is beta. An app on the stable channel sees only stable versions; an app on the beta channel sees both.

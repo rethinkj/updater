@@ -1,0 +1,97 @@
+# Builds and tests on Linux and Windows, and publishes SNAPSHOTs from main.
+#
+# What the CI leaves out: the tests against the real services, which need -Dnetwork.tests=true.
+name: Build
+
+on:
+  # Not for a push that changes the documentation site alone, which docs.yml builds.
+  push:
+    paths-ignore: ['docs/**', '.github/workflows/docs.yml']
+  # Every pull request: main requires both builds, also of one that changes only the site.
+  pull_request:
+  # On main this publishes; on another branch it is a dry run into a folder of the runner, kept as
+  # an artifact of the run.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # A new push to a branch replaces its run; on main every run finishes, as it may publish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Build and test
+        run: mvn -B -ntp verify
+      - name: Keep what failing tests left
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results-${{ matrix.os }}
+          path: '*/target/surefire-reports'
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # The modules hold no platform-specific files, so Linux alone publishes, and only after build
+  # passed on both platforms; deployAtEnd (root POM) uploads nothing from a reactor that failed.
+  publish:
+    name: Publish SNAPSHOT
+    needs: build
+    if: >-
+      github.repository == 'rethinkj/updater'
+      && ((github.event_name == 'push' && github.ref == 'refs/heads/main')
+        || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          # settings.xml gets a server "central-snapshots" whose credentials it reads from these
+          # variables. Not "central": Maven sends that id's credentials only to
+          # repo.maven.apache.org.
+          server-id: central-snapshots
+          server-username-env-var: CENTRAL_USERNAME
+          server-password-env-var: CENTRAL_PASSWORD
+      - name: Deploy
+        env:
+          REAL: ${{ github.ref == 'refs/heads/main' }}
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          if [ "$REAL" = true ]; then
+            if [ -z "$CENTRAL_USERNAME" ] || [ -z "$CENTRAL_PASSWORD" ]; then
+              echo "::warning::CENTRAL_USERNAME or CENTRAL_PASSWORD is not set: nothing published"
+              exit 0
+            fi
+            mvn -B -ntp deploy -DskipTests -Dmaven.install.skip=true -pl '!examples'
+          else
+            mvn -B -ntp deploy -DskipTests -Dmaven.install.skip=true -pl '!examples' \
+              -DaltDeploymentRepository="dry-run::file://$(pwd)/target/snapshots"
+          fi
+      - name: Keep what a dry run deployed
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: snapshots
+          path: target/snapshots
+          retention-days: 7

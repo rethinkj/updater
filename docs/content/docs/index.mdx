@@ -1,0 +1,36 @@
+---
+title: Introduction
+description: What rethinkj Updater is, what state it is in, and where to start.
+---
+
+rethinkj Updater is a Java 25 library that keeps a desktop app up to date on Windows and Linux. It finds new releases, reads their release notes, downloads and verifies them, and replaces the app's files once the app has exited.
+
+**Status: early.** Nothing is implemented yet. The version is `0.1.0-SNAPSHOT` and no artifact is published. The pages under [Concepts](/docs/concepts) describe the intended design, which may still change.
+
+## What it is meant to do
+
+- **Find updates** on GitHub Releases, GitLab, Gitea or Forgejo, or in a JSON manifest on any web server. Versions are compared by SemVer, with stable and beta channels.
+- **Read release notes**: the notes of every version between the installed one and the new one, as Markdown, split into sections such as Added, Fixed and Breaking.
+- **Download and verify**: check each download against a SHA-256 checksum and, if the app configures a public key, an Ed25519 signature.
+- **Apply** an archive (zip or tar.gz), a single JAR, or a native installer. A small helper process waits for the app to exit, replaces its files, restores them if anything fails, and starts the app again.
+
+## Modules
+
+| Artifact | What it is |
+| --- | --- |
+| `rethinkj-updater-core` | Sources, versions, release notes, download and verification |
+| `rethinkj-updater-helper` | The process that replaces the app's files and starts it again |
+
+Both share the group `com.rethinkj.updater`.
+
+## Where to start
+
+| | |
+| --- | --- |
+| [Installation](/docs/get-started) | Add the dependency to a Maven project |
+| [Concepts](/docs/concepts) | How it is meant to work, topic by topic |
+| [Reference](/docs/reference) | Platforms and the changelog |
+
+## For agents
+
+Every page of this site is also Markdown: add `.md` to its address (`/docs/concepts/sources.md`), or use the Copy Markdown button. [/llms.txt](/llms.txt) lists all pages, and [/llms-full.txt](/llms-full.txt) holds them all in one file.

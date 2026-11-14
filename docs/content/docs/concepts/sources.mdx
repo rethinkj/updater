@@ -1,0 +1,10 @@
+---
+title: Sources
+description: Where the library looks for new versions of an app.
+---
+
+Not implemented yet. This page describes the intended design.
+
+A source answers one question: which versions of the app exist, and where are their files? The library is meant to read releases from GitHub Releases, from GitLab, and from Gitea and Forgejo, which share an API. For anything else, a source can be a JSON manifest on any web server that lists versions, their files and checksums.
+
+Versions are compared by SemVer, pre-releases included. A source reports what exists; deciding which version is newer and whether to offer it is the library's job, not the source's.
