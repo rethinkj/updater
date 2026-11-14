@@ -9,6 +9,8 @@ rethinkj Updater is a Java 25 library that keeps a desktop app up to date on Win
 
 ## What it is meant to do
 
+It is headless: it shows nothing itself, and hands the app objects (versions, release notes, progress, results) to show the way the app wants.
+
 - **Find updates** on GitHub Releases, GitLab, Gitea or Forgejo, or in a JSON manifest on any web server. Versions are compared by SemVer, with stable and beta channels.
 - **Read release notes**: the notes of every version between the installed one and the new one, as Markdown, split into sections such as Added, Fixed and Breaking.
 - **Download and verify**: check each download against a SHA-256 checksum and, if the app configures a public key, an Ed25519 signature.

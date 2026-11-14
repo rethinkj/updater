@@ -11,6 +11,7 @@ This file holds the rules for working on the repository, and nothing else. What 
 ## Targets
 
 - Windows 11 or later and Linux, on x64. macOS is not a target.
+- Headless: no windows, dialogs, prompts or output on the console. The library hands its callers objects, results and progress through its API, and they decide what to show. Errors are exceptions or results, never something printed.
 - Runs on an ordinary JRE, JDK 25. GraalVM native image is not a goal, but it has to stay possible. That means:
   - No `java.desktop`: no AWT, no Swing, no ImageIO.
   - No reflection, dynamic proxies or classes generated at run time in this code.
