@@ -17,6 +17,10 @@
 
   <dependencies>
     <dependency>
+      <groupId>tools.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <scope>test</scope>
@@ -27,6 +31,28 @@
     <plugins>
       <plugin>
         <artifactId>maven-source-plugin</artifactId>
+      </plugin>
+      <!-- The tests serve recorded answers with the JDK's HTTP server, which the module itself
+           does not read. -->
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>default-testCompile</id>
+            <configuration>
+              <compilerArgs>
+                <arg>--add-modules=jdk.httpserver</arg>
+                <arg>--add-reads=com.rethinkj.updater=jdk.httpserver</arg>
+              </compilerArgs>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <argLine>--add-modules=jdk.httpserver --add-reads=com.rethinkj.updater=jdk.httpserver</argLine>
+        </configuration>
       </plugin>
     </plugins>
   </build>

@@ -3,8 +3,16 @@ title: Sources
 description: Where the library looks for new versions of an app.
 ---
 
-Not implemented yet. This page describes the intended design.
+A source answers one question: which versions of the app exist, and where are their files? `Source.releases()` lists them as `Release` objects: the version, tag, title, publication date, release notes as Markdown, whether it is a pre-release, and the attached files as `Asset` objects with name, address, size and, where the source reports one, a SHA-256 checksum.
 
-A source answers one question: which versions of the app exist, and where are their files? The library is meant to read releases from GitHub Releases, from GitLab, and from Gitea and Forgejo, which share an API. For anything else, a source can be a JSON manifest on any web server that lists versions, their files and checksums.
+A source reports what exists. Deciding which version is newer and whether to offer it is the library's job, not the source's. Versions are compared by SemVer, pre-releases included (`Version`). Releases whose tag is not a SemVer version, such as `nightly`, and drafts are left out.
 
-Versions are compared by SemVer, pre-releases included. A source reports what exists; deciding which version is newer and whether to offer it is the library's job, not the source's.
+## GitHub
+
+`GitHubSource` reads the releases of a repository on github.com, or on GitHub Enterprise Server through its API address. It reads every page of releases, 100 to a request. Where GitHub reports a file's SHA-256 checksum, the `Asset` carries it; where it reports none, `sha256()` is empty and the file cannot be verified this way.
+
+Without a token GitHub allows 60 requests an hour per IP address. A token raises the limit and lets a private repository be read. When the limit is used up, `releases()` throws a `RateLimitException`, whose `retryAt()` says when GitHub accepts requests again. Any other failure is an `IOException` with a message that says what went wrong; nothing is printed.
+
+## Not implemented yet
+
+GitLab, Gitea and Forgejo, which share an API, and a JSON manifest on any web server that lists versions, their files and checksums.

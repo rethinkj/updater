@@ -8,7 +8,7 @@ A library that keeps Java apps up to date on Windows and Linux. It finds new rel
 
 ## Status
 
-Nothing is implemented yet. The version is `0.1.0-SNAPSHOT`. It targets Windows 11 and Linux on x64, with JDK 25.
+Little is implemented yet: versions and reading GitHub releases. The version is `0.1.0-SNAPSHOT`. It targets Windows 11 and Linux on x64, with JDK 25.
 
 ## What it is meant to do
 

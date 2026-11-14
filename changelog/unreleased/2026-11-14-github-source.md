@@ -1,0 +1,1 @@
+- Added `GitHubSource`, which reads the releases of a GitHub or GitHub Enterprise Server repository as `Release` and `Asset` objects, with release notes and SHA-256 checksums. A used-up rate limit is a `RateLimitException` that says when to try again.
