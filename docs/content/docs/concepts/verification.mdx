@@ -3,8 +3,17 @@ title: Verification
 description: How a download is checked before it is used.
 ---
 
-Not implemented yet. This page describes the intended design.
+A release usually has one file per platform and package format. `Release.asset(Pattern)` picks the one whose whole name matches a pattern, such as `app-.*-windows-x64\.zip`. If more than one matches, it throws rather than guess.
 
-Every download goes into a temporary file first. It is checked against a SHA-256 checksum that the release publishes, and only a file that matches is used. If the app configures an Ed25519 public key, the download must also carry a valid signature made with the matching private key; without one it is rejected.
+`Downloader.download(release, asset, folder, progress)` loads the file into a new temporary file in `folder` and checks it against a SHA-256 checksum. The checksum is the one the source reports, which GitHub does for its assets, or else the one a checksum file of the same release lists: `SHA256SUMS`, `SHA256SUMS.txt`, or a file whose name ends in `checksums.txt`, in the format `sha256sum` writes. Only a file that matches is returned. If no checksum is known, nothing is downloaded; if the file does not match, it is deleted and the call throws an `IOException`.
 
-The checksum protects against broken downloads. The signature protects against a release that someone other than the app's authors published, for instance through a stolen account token.
+- **Progress:** `progress` is told how many bytes have arrived, each time more do. `Asset.size()` is the total.
+- **Cancelling:** interrupt the thread that runs the download, for instance with `Future.cancel(true)`. The call throws an `InterruptedIOException` and leaves no file behind. A download that sends nothing for 30 seconds fails as well.
+- **Private repositories:** files are downloaded without a token, from the address the source reports. The files of a private GitHub repository cannot be downloaded yet; a token serves only to find its releases.
+- **Transport:** files are downloaded over https only, or from this machine. Redirects are followed from https to https only; a download from this machine follows none. A checksum file whose own checksum the source reports must match it before its entries are used.
+
+The checksum protects against broken and altered downloads, as long as it comes from a place the download does not: GitHub reports it through its API.
+
+## Not implemented yet
+
+If the app configures an Ed25519 public key, the download must also carry a valid signature made with the matching private key; without one it is rejected. The signature protects against a release that someone other than the app's authors published, for instance through a stolen account token.

@@ -4,6 +4,8 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * One published version of an app.
@@ -36,5 +38,22 @@ public record Release(
     Objects.requireNonNull(page, "page");
     assets = List.copyOf(assets);
     preRelease = preRelease || version.isPreRelease();
+  }
+
+  /**
+   * The asset whose whole name matches {@code name}, such as {@code app-.*-windows-x64\.zip}, or
+   * empty if none does.
+   *
+   * @throws IllegalArgumentException if more than one asset matches, as a pattern that picks the
+   *     wrong file is worse than none
+   */
+  public Optional<Asset> asset(Pattern name) {
+    List<Asset> matches =
+        assets.stream().filter(a -> name.matcher(a.name()).matches()).toList();
+    if (matches.size() > 1) {
+      throw new IllegalArgumentException("\"" + name + "\" matches several assets of " + tag + ": "
+          + matches.stream().map(Asset::name).toList());
+    }
+    return matches.stream().findFirst();
   }
 }

@@ -229,7 +229,7 @@ public final class GitHubSource implements Source {
   }
 
   /** Whether the host is this machine: {@code localhost} or a loopback IP address, never a name. */
-  private static boolean loopback(URI uri) {
+  static boolean loopback(URI uri) {
     String host = String.valueOf(uri.getHost());
     if (host.equalsIgnoreCase("localhost")) {
       return true;
