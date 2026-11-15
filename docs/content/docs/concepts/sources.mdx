@@ -11,7 +11,7 @@ A source reports what exists. Deciding which version is newer and whether to off
 
 `GitHubSource` reads the releases of a repository on github.com, or on GitHub Enterprise Server through its API address. It reads every page of releases, 100 to a request. Where GitHub reports a file's SHA-256 checksum, the `Asset` carries it; where it reports none, `sha256()` is empty and the file cannot be verified this way.
 
-Without a token GitHub allows 60 requests an hour per IP address. A token raises the limit and lets a private repository be read. When the limit is used up, `releases()` throws a `RateLimitException`, whose `retryAt()` says when GitHub accepts requests again. Any other failure is an `IOException` with a message that says what went wrong; nothing is printed.
+Without a token GitHub allows 60 requests an hour per IP address. A token raises the limit and lets the releases of a private repository be read; `Downloader` cannot download their files yet. When the limit is used up, `releases()` throws a `RateLimitException`, whose `retryAt()` says when GitHub accepts requests again. Any other failure is an `IOException` with a message that says what went wrong; nothing is printed.
 
 ## Not implemented yet
 

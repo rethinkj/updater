@@ -36,7 +36,8 @@ import java.util.regex.Pattern;
  * file whose name ends in {@code checksums.txt}, with lines of the form {@code <hex>  <file name>}.
  * A file whose checksum is not known is not downloaded.
  *
- * <p>Files are downloaded over https, or from this machine. To cancel a download, interrupt the
+ * <p>Files are downloaded without credentials from {@link Asset#url()}, so the files of a private
+ * GitHub repository cannot be downloaded yet. They are downloaded over https, or from this machine. To cancel a download, interrupt the
  * thread that runs it, for instance with {@link java.util.concurrent.Future#cancel(boolean)
  * Future.cancel(true)}. A download that sends nothing for 30 seconds fails.
  */
