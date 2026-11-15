@@ -1,0 +1,34 @@
+---
+title: Check for updates
+description: A small app that finds an update on GitHub, prints its release notes and downloads it verified.
+---
+
+This page builds an app that checks the releases of the GitHub CLI for a version newer than the one it runs, prints what changed since, and downloads the new version's archive for Linux x64, verified against its SHA-256 checksum. The whole app is [`CheckForUpdate`](https://github.com/rethinkj/updater/blob/main/examples/src/test/java/com/rethinkj/updater/examples/docs/CheckForUpdate.java) in the repository's examples; its `main` runs it against GitHub.
+
+## Find the update
+
+A [source](/docs/concepts/sources) lists the published releases. Without a token, `GitHubSource` reads a public repository:
+
+```java snippet="source"
+```
+
+`Update.find` compares them with the installed version. It returns an update only if a release is newer; pre-releases are left out.
+
+```java snippet="find"
+```
+
+## Show the release notes
+
+`update.releases()` holds every release newer than the installed one, newest first, so an app that skipped versions shows everything that changed since. The notes are Markdown, for the app to show the way it wants; the library prints nothing.
+
+```java snippet="notes"
+```
+
+## Download and verify
+
+`latest()` is the release to update to. `asset` picks its file for this platform by a pattern for the whole name, and `Downloader` loads it into a new file in `folder` and returns it only if it matches its checksum. The last argument is told how many bytes have arrived, for a progress bar. See [Verification](/docs/concepts/verification) for where the checksum comes from and how to cancel.
+
+```java snippet="download"
+```
+
+The file is the app's to delete once it is no longer needed. Replacing the app's files with it is not implemented yet; see [Applying updates](/docs/concepts/applying-updates).

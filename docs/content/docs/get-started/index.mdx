@@ -3,7 +3,7 @@ title: Installation
 description: How to add rethinkj Updater to a Maven project.
 ---
 
-rethinkj Updater needs JDK 25 and runs on Windows 11 and later and on Linux, both on x64. Nothing is implemented yet and no artifact is published, so for now the only way to depend on it is to build it yourself.
+rethinkj Updater needs JDK 25 and runs on Windows 11 and later and on Linux, both on x64. So far it only checks for updates and downloads them, and no artifact is published, so for now the only way to depend on it is to build it yourself.
 
 ## Build it
 
@@ -28,3 +28,5 @@ This puts the artifacts in your local Maven repository (`~/.m2`).
 ```
 
 `rethinkj-updater-helper` is the separate process that applies an update. How an app ships it alongside itself is not decided yet; see [Applying updates](/docs/concepts/applying-updates).
+
+Next, [check for updates](/docs/get-started/check-for-updates) in a small app.
