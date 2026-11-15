@@ -52,6 +52,12 @@ class DownloaderTest {
       exchange.getResponseBody().write(body);
       exchange.close();
     });
+    // A redirect from this machine, which could lead anywhere over plain http.
+    server.createContext("/away.zip", exchange -> {
+      exchange.getResponseHeaders().add("Location", base + "app.zip");
+      exchange.sendResponseHeaders(302, -1);
+      exchange.close();
+    });
     // Sends a first part, then nothing until the test ends.
     server.createContext("/slow.zip", exchange -> {
       exchange.sendResponseHeaders(200, 0);
@@ -105,17 +111,31 @@ class DownloaderTest {
   }
 
   @Test
-  void handsOnNothingWithoutAMatchingChecksum() throws IOException {
+  void handsOnNothingWithoutAMatchingChecksum() {
     Downloader downloader = new Downloader();
-    Asset wrong = asset("app.zip", "1".repeat(64));
+    Asset app = asset("app.zip", sha256(APP));
     Asset unknown = asset("app.zip", "");
+    Asset wrong = asset("app.zip", "1".repeat(64));
     Asset plain = new Asset("app.zip", URI.create("http://example.com/app.zip"), 1, sha256(APP));
-    for (Asset a : List.of(wrong, unknown, plain)) {
-      assertThrows(IOException.class, () -> downloader.download(release(a), a, folder, n -> {}));
+    Asset away = asset("away.zip", sha256(APP));
+    Asset alteredSums = asset("SHA256SUMS", "2".repeat(64)); // the source says otherwise
+    for (Release r : List.of(
+        release(wrong),
+        release(unknown),
+        release(plain),
+        release(away),
+        release(unknown, alteredSums))) {
+      Asset a = r.assets().getFirst();
+      assertThrows(
+          IOException.class, () -> downloader.download(r, a, folder, n -> {}), a.url() + "");
     }
-    try (var left = Files.list(folder)) {
-      assertEquals(List.of(), left.toList());
-    }
+    // A callback that fails leaves nothing behind either.
+    assertThrows(
+        AssertionError.class,
+        () -> downloader.download(release(app), app, folder, n -> {
+          throw new AssertionError("fails");
+        }));
+    assertEquals(List.of(), files());
   }
 
   @Test
@@ -130,8 +150,14 @@ class DownloaderTest {
     } finally {
       Thread.interrupted();
     }
-    try (var left = Files.list(folder)) {
-      assertEquals(List.of(), left.toList());
+    assertEquals(List.of(), files());
+  }
+
+  private List<Path> files() {
+    try (var files = Files.list(folder)) {
+      return files.toList();
+    } catch (IOException e) {
+      throw new AssertionError(e);
     }
   }
 

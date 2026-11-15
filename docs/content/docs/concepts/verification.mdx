@@ -9,7 +9,7 @@ A release usually has one file per platform and package format. `Release.asset(P
 
 - **Progress:** `progress` is told how many bytes have arrived, each time more do. `Asset.size()` is the total.
 - **Cancelling:** interrupt the thread that runs the download, for instance with `Future.cancel(true)`. The call throws an `InterruptedIOException` and leaves no file behind. A download that sends nothing for 30 seconds fails as well.
-- **Transport:** files are downloaded over https only, or from this machine. Redirects are followed, never from https to http.
+- **Transport:** files are downloaded over https only, or from this machine. Redirects are followed from https to https only; a download from this machine follows none. A checksum file whose own checksum the source reports must match it before its entries are used.
 
 The checksum protects against broken and altered downloads, as long as it comes from a place the download does not: GitHub reports it through its API.
 

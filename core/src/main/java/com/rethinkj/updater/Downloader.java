@@ -49,10 +49,9 @@ public final class Downloader {
   // As sha256sum writes it: the checksum, a space, and a space or "*" before the file name.
   private static final Pattern CHECKSUM_LINE = Pattern.compile("([0-9a-fA-F]{64}) [ *](.+)");
 
-  private final HttpClient http = HttpClient.newBuilder()
-      .connectTimeout(TIMEOUT)
-      .followRedirects(HttpClient.Redirect.NORMAL) // never from https to http
-      .build();
+  // Redirects go only from https to https; one from this machine could lead anywhere over http.
+  private final HttpClient https = client(HttpClient.Redirect.NORMAL);
+  private final HttpClient local = client(HttpClient.Redirect.NEVER);
 
   /**
    * Downloads {@code asset} of {@code release} into a new file in {@code folder} and verifies it.
@@ -66,7 +65,7 @@ public final class Downloader {
    */
   public Path download(Release release, Asset asset, Path folder, LongConsumer progress)
       throws IOException {
-    String expected = sha256(release, asset);
+    String expected = checksum(release, asset);
     // The name comes from the server: keep only what is safe in a file name on every platform.
     Path file = Files.createTempFile(
         folder, "download-", "-" + asset.name().replaceAll("[^A-Za-z0-9._-]", "_"));
@@ -81,7 +80,7 @@ public final class Downloader {
             + ", received " + actual);
       }
       return file;
-    } catch (IOException | RuntimeException e) {
+    } catch (Throwable e) { // also an Error, say from progress: the path never reaches the caller
       try {
         Files.deleteIfExists(file);
       } catch (IOException d) {
@@ -92,7 +91,7 @@ public final class Downloader {
   }
 
   /** The checksum the source reports, or the one in a checksum file of the release. */
-  private String sha256(Release release, Asset asset) throws IOException {
+  private String checksum(Release release, Asset asset) throws IOException {
     if (!asset.sha256().isEmpty()) {
       return asset.sha256();
     }
@@ -102,6 +101,11 @@ public final class Downloader {
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       copy(sums, out, MAX_CHECKSUM_FILE, n -> {});
+      String reported = sums.sha256();
+      if (!reported.isEmpty() && !reported.equals(sha256(out.toByteArray()))) {
+        throw new IOException(
+            sums.name() + " of " + release.tag() + " does not match its checksum");
+      }
       for (String line : out.toString(StandardCharsets.UTF_8).lines().toList()) {
         Matcher m = CHECKSUM_LINE.matcher(line.strip());
         if (m.matches() && m.group(2).equals(asset.name())) {
@@ -116,8 +120,8 @@ public final class Downloader {
   private void copy(Asset asset, OutputStream out, long max, LongConsumer progress)
       throws IOException {
     URI uri = asset.url();
-    if (!"https".equalsIgnoreCase(uri.getScheme())
-        && !("http".equalsIgnoreCase(uri.getScheme()) && GitHubSource.loopback(uri))) {
+    boolean secure = "https".equalsIgnoreCase(uri.getScheme());
+    if (!secure && !("http".equalsIgnoreCase(uri.getScheme()) && GitHubSource.loopback(uri))) {
       throw new IOException("Files are downloaded only over https, not from " + uri);
     }
     HttpRequest request = HttpRequest.newBuilder(uri)
@@ -126,7 +130,7 @@ public final class Downloader {
         .build();
     HttpResponse<Flow.Publisher<List<ByteBuffer>>> response;
     try {
-      response = http.send(request, HttpResponse.BodyHandlers.ofPublisher());
+      response = (secure ? https : local).send(request, HttpResponse.BodyHandlers.ofPublisher());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new InterruptedIOException("Interrupted while downloading " + uri);
@@ -153,6 +157,17 @@ public final class Downloader {
     } finally {
       body.cancel(); // frees the connection if the body was not read to its end
     }
+  }
+
+  private static HttpClient client(HttpClient.Redirect redirect) {
+    return HttpClient.newBuilder()
+        .connectTimeout(TIMEOUT)
+        .followRedirects(redirect)
+        .build();
+  }
+
+  private static String sha256(byte[] bytes) {
+    return HexFormat.of().formatHex(newDigest().digest(bytes));
   }
 
   private static MessageDigest newDigest() {
