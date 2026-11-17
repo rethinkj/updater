@@ -50,16 +50,19 @@ jobs:
 
   # The modules hold no platform-specific files, so Linux alone publishes, and only after build
   # passed on both platforms; deployAtEnd (root POM) uploads nothing from a reactor that failed.
+  # Only this job references the credentials, so the code of no other branch runs where they are.
   publish:
     name: Publish SNAPSHOT
     needs: build
     if: >-
-      github.repository == 'rethinkj/updater'
-      && ((github.event_name == 'push' && github.ref == 'refs/heads/main')
-        || github.event_name == 'workflow_dispatch')
+      github.repository == 'rethinkj/updater' && github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      # An expression's == ignores case: stop a branch named MAIN before its code is checked out.
+      - name: Only main
+        run: '[ "$GITHUB_REF" = refs/heads/main ]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
@@ -74,22 +77,36 @@ jobs:
           server-password-env-var: CENTRAL_PASSWORD
       - name: Deploy
         env:
-          REAL: ${{ github.ref == 'refs/heads/main' }}
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
         run: |
-          if [ "$REAL" = true ]; then
-            if [ -z "$CENTRAL_USERNAME" ] || [ -z "$CENTRAL_PASSWORD" ]; then
-              echo "::warning::CENTRAL_USERNAME or CENTRAL_PASSWORD is not set: nothing published"
-              exit 0
-            fi
-            mvn -B -ntp deploy -DskipTests -Dmaven.install.skip=true -pl '!examples'
-          else
-            mvn -B -ntp deploy -DskipTests -Dmaven.install.skip=true -pl '!examples' \
-              -DaltDeploymentRepository="dry-run::file://$(pwd)/target/snapshots"
+          if [ -z "$CENTRAL_USERNAME" ] || [ -z "$CENTRAL_PASSWORD" ]; then
+            echo "::warning::CENTRAL_USERNAME or CENTRAL_PASSWORD is not set: nothing published"
+            exit 0
           fi
-      - name: Keep what a dry run deployed
-        if: github.ref != 'refs/heads/main'
+          mvn -B -ntp deploy -DskipTests -Dmaven.install.skip=true -pl '!examples'
+
+  # A manual run on another branch deploys into a folder of the runner, without credentials.
+  dry-run:
+    name: Publish SNAPSHOT (dry run)
+    needs: build
+    if: >-
+      github.repository == 'rethinkj/updater' && github.ref != 'refs/heads/main'
+      && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Deploy into a folder
+        run: >-
+          mvn -B -ntp deploy -DskipTests -Dmaven.install.skip=true -pl '!examples'
+          -DaltDeploymentRepository="dry-run::file://$(pwd)/target/snapshots"
+      - name: Keep what was deployed
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: snapshots
