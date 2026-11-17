@@ -65,7 +65,7 @@ record Plan(
     Properties p = new Properties();
     try (Reader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
       p.load(in);
-    } catch (IOException e) {
+    } catch (IOException | IllegalArgumentException e) { // also a malformed Unicode escape
       throw new Rejected("failed", "Cannot read " + file + ": " + e);
     }
     // First, since a plan of another format may have none of the keys below.

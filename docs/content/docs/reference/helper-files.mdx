@@ -39,12 +39,12 @@ core writes the plan before it starts the helper, for instance on Linux:
 | `file` | The verified download. |
 | `sha256` | Its SHA-256 checksum in lowercase hex. The helper checks it again before it changes anything. |
 | `mode` | `restart`: the app exits now, and the helper starts the new version. `exit`: the helper replaces the app whenever it exits, and does not start it. |
-| `command.0`, `command.1`, … | With `mode=restart`: the command that starts the new version, one argument per key. |
+| `command.0`, `command.1`, … | With `mode=restart`: the command that starts the app, one argument per key. It comes from the installed version, and the helper runs it to start the new version and, after a rollback, the old one. |
 | `confirm.seconds` | With `mode=restart`: how long the new version has to confirm that it runs. |
 
 ## Confirmation
 
-The new version writes `confirmed.properties`, with `format=1`, once it runs. If it does not arrive within `confirm.seconds`, or the app exits before, the helper restores the old version and starts that.
+The new version writes `confirmed.properties`, with `format=1`, once it runs. The helper deletes an earlier one before it starts the new version. If it does not arrive within `confirm.seconds`, or the app exits before, the helper restores the old version and starts that.
 
 ## Result
 
