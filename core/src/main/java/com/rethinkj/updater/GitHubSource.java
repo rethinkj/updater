@@ -65,8 +65,8 @@ public final class GitHubSource implements Source {
    * @param api the REST API, {@code https://api.github.com/} or {@code https://<host>/api/v3/}
    * @param repository owner and name, such as {@code rethinkj/updater}
    * @param token a token that may read the repository's releases, or {@code null} for none
-   * @throws IllegalArgumentException if {@code repository} is not owner/name, or a token would go
-   *     over plain http to another machine
+   * @throws IllegalArgumentException if {@code repository} is not owner/name, or {@code api} is
+   *     neither https nor on this machine
    */
   public GitHubSource(URI api, String repository, String token) {
     if (!REPOSITORY.matcher(repository).matches()) {
@@ -76,11 +76,11 @@ public final class GitHubSource implements Source {
     this.api = URI.create(base.endsWith("/") ? base : base + "/");
     this.repository = repository;
     this.token = token == null || token.isBlank() ? null : token.strip();
-    if (this.token != null
-        && !"https".equalsIgnoreCase(this.api.getScheme())
-        && !loopback(this.api)) {
+    // Over plain http anyone on the way could swap a release's addresses and checksums.
+    if (!"https".equalsIgnoreCase(this.api.getScheme())
+        && !("http".equalsIgnoreCase(this.api.getScheme()) && loopback(this.api))) {
       throw new IllegalArgumentException(
-          "A token is sent only over https or to this machine, not to " + this.api);
+          "Releases are read only over https or from this machine, not from " + this.api);
     }
     // Redirects are followed by hand, so that the token goes only to the API's own origin.
     this.http = HttpClient.newBuilder()

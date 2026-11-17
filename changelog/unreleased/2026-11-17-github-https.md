@@ -1,0 +1,1 @@
+- `GitHubSource` reads releases only over https or from this machine, also without a token, so that nobody on the way can change a release's files and checksums.

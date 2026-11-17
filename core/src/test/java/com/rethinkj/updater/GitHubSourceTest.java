@@ -136,11 +136,12 @@ class GitHubSourceTest {
   }
 
   @Test
-  void sendsNoTokenOverPlainHttpToAnotherMachine() {
-    for (String api : List.of("http://ghe.example.com/api/v3", "http://127.example.com/")) {
+  void readsOnlyOverHttpsOrFromThisMachine() {
+    for (String api :
+        List.of("http://ghe.example.com/api/v3", "http://127.example.com/", "ftp://localhost/")) {
       assertThrows(
           IllegalArgumentException.class,
-          () -> new GitHubSource(URI.create(api), "a/b", "test-token"),
+          () -> new GitHubSource(URI.create(api), "a/b", null),
           api);
     }
     for (String api :
