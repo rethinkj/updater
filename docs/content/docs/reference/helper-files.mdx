@@ -1,0 +1,70 @@
+---
+title: Helper files
+description: The files through which core and the helper work together, in format 1.
+---
+
+core and the helper (`rethinkj-updater-helper`) do not call each other. core starts the helper with one argument, the path of a plan, and the two exchange everything else through files. Some of these files are written by one version of the app and read by the next, so each format stays readable across versions.
+
+So far the helper reads the plan and rejects one it cannot carry out. It does not replace files yet.
+
+| File | Folder | Written by | Read by |
+| --- | --- | --- | --- |
+| `plan.properties` | update folder | core of the installed version | the helper of the same version |
+| `confirmed.properties` | update folder | core of the new version, once it runs | the helper that started it |
+| `result.properties` | update folder | the helper | core, when the app starts next |
+| `rethinkj-updater.files` | app folder | the build, or the helper after an update | the helper of a later update |
+
+The update folder is one the app names, outside its own folder, such as `%LOCALAPPDATA%\MyApp\updates`. The files in it have fixed names, so that a new version finds them although it did not write the plan.
+
+## Rules
+
+- `plan.properties`, `confirmed.properties` and `result.properties` are Java properties files in UTF-8, as `Properties.load(Reader)` reads them, each with a key `format`.
+- A reader ignores keys it does not know. A format can gain a key only if a reader that ignores it still does the right thing.
+- A helper that does not read the plan's format changes nothing and writes a result with the reason `format`.
+- The manifest of the helper JAR lists the plan formats the helper reads in the attribute `Rethinkj-Updater-Plan-Formats`, separated by spaces. core writes the highest format both read.
+
+## Plan
+
+core writes the plan before it starts the helper, for instance on Linux:
+
+```properties file="helper/src/test/resources/plan.properties" start="format="
+```
+
+| Key | Value |
+| --- | --- |
+| `format` | `1` |
+| `pid` | The ID of the app's process. The helper waits until it has exited. |
+| `app` | The app's folder, or with `kind=jar` the JAR file. |
+| `kind` | `archive` if `file` is a zip or tar.gz of the whole app, `jar` if it is a single JAR. |
+| `file` | The verified download. |
+| `sha256` | Its SHA-256 checksum in lowercase hex. The helper checks it again before it changes anything. |
+| `mode` | `restart`: the app exits now, and the helper starts the new version. `exit`: the helper replaces the app whenever it exits, and does not start it. |
+| `command.0`, `command.1`, … | With `mode=restart`: the command that starts the app, one argument per key. It comes from the installed version, and the helper runs it to start the new version and, after a rollback, the old one. |
+| `confirm.seconds` | With `mode=restart`: how long the new version has to confirm that it runs. |
+
+## Confirmation
+
+The new version writes `confirmed.properties`, with `format=1`, once it runs. The helper deletes an earlier one before it starts the new version. If it does not arrive within `confirm.seconds`, or the app exits before, the helper restores the old version and starts that.
+
+## Result
+
+| Key | Value |
+| --- | --- |
+| `format` | `1` |
+| `status` | `applied`; `rolled-back` if the old version is back in place; `rejected` if nothing changed. |
+| `reason` | With `rolled-back` or `rejected`: one of the codes below. |
+| `message` | A sentence in English for a log, not for parsing. |
+
+| Reason | Meaning |
+| --- | --- |
+| `format` | The helper does not read the plan's format. |
+| `checksum` | `file` does not match `sha256`. |
+| `locked` | Files of the app stayed locked, by a virus scanner for instance. |
+| `not-confirmed` | The new version did not confirm in time, or exited first. |
+| `no-permission` | The user may not write to the app's folder, and the app does not let the helper ask for rights. |
+| `declined` | The user declined to give the helper rights. |
+| `failed` | Anything else, such as a plan that lacks a key. The message says what. |
+
+## File list
+
+`rethinkj-updater.files` in the app's folder lists the files of the installed version: one file per line, relative to the app's folder, with `/` between folders, in UTF-8. A file in the app's folder that the list does not name, such as settings the app keeps there, is carried over into the new version. Without a list, the helper replaces and adds files but deletes none. A single JAR has no list.

@@ -8,3 +8,5 @@ Not implemented yet. This page describes the intended design.
 A running app cannot reliably replace its own files, least of all on Windows, where open files are locked. So the app starts a small helper process (`rethinkj-updater-helper`) and exits. The helper waits until the app has exited, replaces its files, and starts the app again. If anything fails along the way, it restores the old files, so that the app still starts.
 
 An update can come in three forms: an archive of the whole app (zip or tar.gz), a single JAR, or a native installer (such as an MSI or a Linux package), which the helper runs instead of copying files itself.
+
+core and the helper work together through files in a folder the app names; [Helper files](/docs/reference/helper-files) describes them.
