@@ -161,7 +161,11 @@ final class Archive {
           longName = string(bytes, 0, bytes.length);
         }
         case 'x' -> longName = paxPath(data.readAllBytes());
-        case 'g' -> {} // PAX values for all entries
+        case 'g' -> { // PAX values for all entries; paxPath rejects a size or sparse map in them
+          if (paxPath(data.readAllBytes()) != null) {
+            throw new IOException("The tar archive gives all its files one path");
+          }
+        }
         default ->
           throw new IOException(name + " is a link or a special file, not a file or folder");
       }
