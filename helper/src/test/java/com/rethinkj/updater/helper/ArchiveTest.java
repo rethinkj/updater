@@ -24,10 +24,12 @@ class ArchiveTest {
   Path temp;
 
   /**
-   * The archives hold one folder, {@code Bücher App-1.3.0}, made with GNU tar 1.35 and {@code
-   * --owner=0 --group=0 --numeric-owner}: {@code gnu} with {@code --format=gnu -C <parent> .}, so
-   * its names start with {@code ./}, {@code pax} with {@code --format=posix}, {@code ustar} with
-   * {@code --format=ustar}. Each stores the long name of the JAR in its own way.
+   * The archives hold one folder, {@code Bücher App-1.3.0}, in which the JAR has mode 0664. {@code
+   * gnu} and {@code pax} are made with GNU tar 1.35, {@code --owner=0 --group=0 --numeric-owner}
+   * and {@code --format=gnu -C <parent> .}, so that its names start with {@code ./}, or {@code
+   * --format=posix}. {@code ustar} is made with Python 3.12's {@code tarfile} and {@code
+   * USTAR_FORMAT}, which leaves the name field of the JAR's folder empty and puts its whole path
+   * into the prefix. Each stores the long path of the JAR in its own way.
    */
   @ParameterizedTest
   @ValueSource(strings = {"gnu", "pax", "ustar"})
@@ -37,8 +39,10 @@ class ArchiveTest {
     Archive.extract(ARCHIVES.resolve(format + ".tar.gz"), app);
 
     Path launcher = app.resolve("bin/Bücher App");
-    Path jar = app.resolve(
-        "lib/a-module-whose-name-makes-the-path-longer-than-the-hundred-bytes-of-a-tar-header-1.3.0.jar");
+    Path jar = app.resolve("lib")
+        .resolve(
+            "a-folder-whose-name-of-a-hundred-characters-fits-a-tar-header-only-without-the-slash-at-its-end-0100")
+        .resolve("app.jar");
     assertEquals("#!/bin/sh\n", Files.readString(launcher));
     assertEquals("module\n", Files.readString(jar));
     if (app.getFileSystem().supportedFileAttributeViews().contains("posix")) {

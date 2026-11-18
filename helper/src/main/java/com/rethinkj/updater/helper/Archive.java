@@ -9,6 +9,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -117,7 +118,8 @@ final class Archive {
       start = in.readNBytes(2);
     }
     if (start.length == 2 && start[0] == 0x1f && start[1] == (byte) 0x8b) { // gzip
-      try (InputStream in = new GZIPInputStream(Files.newInputStream(archive), 1 << 16)) {
+      try (InputStream file = Files.newInputStream(archive);
+          InputStream in = new GZIPInputStream(file, 1 << 16)) {
         readTar(in, visitor);
       }
       return;
@@ -131,6 +133,9 @@ final class Archive {
     }
   }
 
+  /** The end of a tar archive. A name alone does not tell it: a ustar name may be all prefix. */
+  private static final byte[] END = new byte[512];
+
   private static void readTar(InputStream in, Visitor visitor) throws IOException {
     byte[] header = new byte[512];
     String longName = null; // from a GNU or PAX header, for the entry that follows it
@@ -138,7 +143,7 @@ final class Archive {
       if (in.readNBytes(header, 0, 512) < 512) {
         throw new EOFException("The tar archive ends without its end marker");
       }
-      if (header[0] == 0) { // the end marker, a block of zeros
+      if (Arrays.equals(header, END)) {
         return;
       }
       long size = number(header, 124, 12);
@@ -154,7 +159,7 @@ final class Archive {
           longName = string(bytes, 0, bytes.length);
         }
         case 'x' -> longName = paxPath(data.readAllBytes());
-        case 'K', 'g' -> {} // the long target of a link, rejected next; PAX values for all entries
+        case 'g' -> {} // PAX values for all entries
         default ->
           throw new IOException(name + " is a link or a special file, not a file or folder");
       }
