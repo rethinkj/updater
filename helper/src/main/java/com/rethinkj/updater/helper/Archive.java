@@ -191,8 +191,11 @@ final class Archive {
             new String(records, space + 1, i + length - space - 2, StandardCharsets.UTF_8);
         if (record.startsWith("path=")) {
           path = record.substring(5);
-        } else if (record.startsWith("size=")) { // for files over 8 GB, which no app has
-          throw new IOException("The tar archive has a PAX size, which the helper does not read");
+        } else if (record.startsWith("size=") || record.startsWith("GNU.sparse.")) {
+          // A file over 8 GB, which no app has, or one packed with tar --sparse.
+          throw new IOException(
+              "The tar archive holds a file over 8 GB or a sparse file, which the helper does not"
+                  + " read");
         }
         i += length;
       }
