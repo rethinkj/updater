@@ -125,7 +125,7 @@ class ReplaceTest {
   @EnabledOnOs(OS.WINDOWS)
   void triesAgainWhileAFileIsLockedAndChangesNothingIfItStaysLocked() throws Exception {
     Path app = oldVersion();
-    Path zip = zip("bin/app", "1.3.0");
+    Path zip = zip("Bücher App-1.3.0/bin/app", "1.3.0");
     Plan plan = Plan.read(plan(app, "archive", zip, sha256(zip)));
     // java.io opens a file without FILE_SHARE_DELETE, as a virus scanner may: then neither the
     // file nor its folders can be renamed.
