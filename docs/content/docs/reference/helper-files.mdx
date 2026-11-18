@@ -51,7 +51,7 @@ The new version writes `confirmed.properties`, with `format=1`, once it runs. Th
 | Key | Value |
 | --- | --- |
 | `format` | `1` |
-| `status` | `applied`; `rolled-back` if the old version is back in place; `rejected` if nothing changed. |
+| `status` | `applied`; `rolled-back` if the old version is back in place; `rejected` if nothing changed. One exception: if the helper cannot rename the old version back, the app's folder is missing, and it writes `rejected` with the reason `failed` and a message that names the folder holding the old version. |
 | `reason` | With `rolled-back` or `rejected`: one of the codes below. |
 | `message` | A sentence in English for a log, not for parsing. |
 
