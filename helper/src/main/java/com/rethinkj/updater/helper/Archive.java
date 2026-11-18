@@ -3,6 +3,7 @@ package com.rethinkj.updater.helper;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -121,6 +122,7 @@ final class Archive {
       try (InputStream file = Files.newInputStream(archive);
           InputStream in = new GZIPInputStream(file, 1 << 16)) {
         readTar(in, visitor);
+        in.transferTo(OutputStream.nullOutputStream()); // only at its end does gzip check its CRC
       }
       return;
     }
@@ -189,6 +191,8 @@ final class Archive {
             new String(records, space + 1, i + length - space - 2, StandardCharsets.UTF_8);
         if (record.startsWith("path=")) {
           path = record.substring(5);
+        } else if (record.startsWith("size=")) { // for files over 8 GB, which no app has
+          throw new IOException("The tar archive has a PAX size, which the helper does not read");
         }
         i += length;
       }
