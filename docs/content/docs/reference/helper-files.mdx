@@ -5,7 +5,7 @@ description: The files through which core and the helper work together, in forma
 
 core and the helper (`rethinkj-updater-helper`) do not call each other. core starts the helper with one argument, the path of a plan, and the two exchange everything else through files. Some of these files are written by one version of the app and read by the next, so each format stays readable across versions.
 
-So far the helper reads the plan and rejects one it cannot carry out. It does not replace files yet.
+So far the helper replaces the app, as [Applying updates](/docs/concepts/applying-updates) describes, but does not start it again.
 
 | File | Folder | Written by | Read by |
 | --- | --- | --- | --- |
@@ -67,4 +67,4 @@ The new version writes `confirmed.properties`, with `format=1`, once it runs. Th
 
 ## File list
 
-`rethinkj-updater.files` in the app's folder lists the files of the installed version: one file per line, relative to the app's folder, with `/` between folders, in UTF-8. A file in the app's folder that the list does not name, such as settings the app keeps there, is carried over into the new version. Without a list, the helper replaces and adds files but deletes none. A single JAR has no list.
+`rethinkj-updater.files` in the app's folder lists the files of the installed version: one file per line, relative to the app's folder, with `/` between folders, in UTF-8. A file in the app's folder that the list does not name, such as settings the app keeps there, is carried over into the new version, also in place of a file the new version brings. Without a list, the helper replaces and adds files but deletes none. The helper writes the list of the new version, and `java -jar rethinkj-updater-helper.jar list <folder>` writes it into a built app's folder. A single JAR has no list.
