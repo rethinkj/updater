@@ -1,1 +1,1 @@
-- `rethinkj-updater-helper` reads its task from a plan, `java -jar rethinkj-updater-helper.jar <plan>`, and rejects a plan of a format it does not read, with the reason in `result.properties` beside it. It does not replace files yet. The page Helper files describes the files core and the helper exchange.
+- `rethinkj-updater-helper` reads its task from a plan, `java -jar rethinkj-updater-helper.jar <plan>`, and rejects a plan of a format it does not read, with the reason in `result.properties` beside it. The page Helper files describes the files core and the helper exchange.
