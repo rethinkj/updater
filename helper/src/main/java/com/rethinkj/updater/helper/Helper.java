@@ -75,7 +75,7 @@ public final class Helper {
         running = startConfirmed(plan, folder);
         if (!running) {
           unconfirmed = true;
-          Replace.rollBack(plan.app(), backup, LOCKED_FOR);
+          rollBack(plan, backup);
           unconfirmed = false;
           status = "rolled-back";
           reason = "not-confirmed";
@@ -113,6 +113,18 @@ public final class Helper {
       startOld(plan, folder);
     }
     return status.equals(APPLIED) ? 0 : 1;
+  }
+
+  /** Puts the old version back, retrying a locked file also if the helper was interrupted. */
+  private static void rollBack(Plan plan, Path backup) throws IOException {
+    boolean interrupted = Thread.interrupted(); // an interrupted thread would not wait to retry
+    try {
+      Replace.rollBack(plan.app(), backup, LOCKED_FOR);
+    } finally {
+      if (interrupted) {
+        Thread.currentThread().interrupt();
+      }
+    }
   }
 
   /** Starts the version that ran before, if it can; the result says why not. */
