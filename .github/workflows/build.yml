@@ -84,7 +84,7 @@ jobs:
             echo "::warning::CENTRAL_USERNAME or CENTRAL_PASSWORD is not set: nothing published"
             exit 0
           fi
-          mvn -B -ntp deploy -DskipTests -Dmaven.install.skip=true -pl '!examples'
+          mvn -B -ntp deploy -DskipTests -Dmaven.install.skip=true -Djavadoc.jar.skip=false -pl '!examples'
 
   # A manual run on another branch deploys into a folder of the runner, without credentials.
   dry-run:
@@ -104,7 +104,7 @@ jobs:
           cache: maven
       - name: Deploy into a folder
         run: >-
-          mvn -B -ntp deploy -DskipTests -Dmaven.install.skip=true -pl '!examples'
+          mvn -B -ntp deploy -DskipTests -Dmaven.install.skip=true -Djavadoc.jar.skip=false -pl '!examples'
           -DaltDeploymentRepository="dry-run::file://$(pwd)/target/snapshots"
       - name: Keep what was deployed
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -29,7 +29,7 @@ export default function HomePage() {
           <Button href={repository}>GitHub</Button>
         </div>
         <p className="mt-6 text-sm text-fd-muted-foreground">
-          Early: nothing is implemented yet. Java 25, Windows 11 and Linux on x64.
+          Early: version 0.1.0-SNAPSHOT, Java 25, Windows 11 and Linux on x64. SNAPSHOTs on Maven Central, no release yet.
         </p>
       </section>
 
