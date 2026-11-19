@@ -21,8 +21,6 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * The installed app, which the helper replaces once the app has exited: the app's folder, or its
@@ -65,8 +63,8 @@ public final class Installation {
   }
 
   private Installation(Path app, Path updates, List<String> command, Path helper) {
-    this.app = app.toAbsolutePath().normalize();
-    this.updates = updates.toAbsolutePath().normalize();
+    this.app = app.toAbsolutePath();
+    this.updates = updates.toAbsolutePath();
     this.command = List.copyOf(command);
     this.helper = helper;
   }
@@ -93,7 +91,7 @@ public final class Installation {
    * resolved, for instance with {@code --add-modules}.
    */
   public Installation withHelper(Path jar) {
-    return new Installation(app, updates, command, jar.toAbsolutePath().normalize());
+    return new Installation(app, updates, command, jar.toAbsolutePath());
   }
 
   /** The app's folder, or its JAR file. */
@@ -111,17 +109,21 @@ public final class Installation {
    * needs to replace the app. Ask before downloading an update that could not be applied.
    */
   public boolean writable() {
-    return Files.isWritable(app) && Files.isWritable(app.getParent());
+    try {
+      Path real = app.toRealPath();
+      return Files.isWritable(real) && Files.isWritable(real.getParent());
+    } catch (IOException e) {
+      return false;
+    }
   }
 
   /**
    * What the helper reported about the last update, once: the report is deleted as it is read.
    * Empty if there is none, or while a helper is still at work.
    *
-   * <p>With the report, it deletes what the update left behind: the helper's copy in the update
-   * folder and, if the app's folder is in place, what the helper built beside it, an unfinished new
-   * version or, once the update is applied, the old version. A copy of the helper that Windows
-   * still holds open is deleted at a later call.
+   * <p>Unless a helper is at work, it also deletes the copies of the helper in the update folder.
+   * One that Windows still holds open, as the helper exits, is deleted at a later call. What the
+   * helper builds beside the app's folder, the helper deletes itself.
    *
    * @throws IOException if the report cannot be read or deleted
    */
@@ -129,27 +131,22 @@ public final class Installation {
     synchronized (LOCK) {
       Path file = updates.resolve("result.properties");
       Path plan = updates.resolve("plan.properties");
-      if (!Files.exists(file)) {
-        if (!Files.exists(plan)) { // else a helper is at work, or was ended before it reported
-          deleteAll(updates, "helper-", 0);
-        }
-        return Optional.empty();
+      Optional<Result> result = Optional.empty();
+      if (Files.exists(file)) {
+        result = Optional.of(Result.read(file));
+        Files.deleteIfExists(plan); // first: a plan without a result means a helper at work
+        Files.delete(file);
+      } else if (Files.exists(plan)) {
+        return result; // a helper is at work, or was ended before it could report
       }
-      Result result = Result.read(file);
-      // The helper names what it builds by the time, after the plan: older names are not its own.
-      long since =
-          Files.exists(plan) ? Files.getLastModifiedTime(plan).toMillis() - 60_000 : Long.MAX_VALUE;
-      Files.deleteIfExists(plan); // first: a plan without a result means a helper at work
-      Files.delete(file);
-      deleteAll(updates, "helper-", 0);
-      if (Files.exists(app)) { // else the old version beside it may be the only one left
-        String name = app.getFileName().toString();
-        deleteAll(app.getParent(), name + ".new-", since);
-        if (result.status() == Result.Status.APPLIED) {
-          deleteAll(app.getParent(), name + ".backup-", since);
+      try (DirectoryStream<Path> copies = Files.newDirectoryStream(updates, "helper-*")) {
+        for (Path copy : copies) {
+          delete(copy);
         }
+      } catch (IOException e) {
+        // Tried again at the next call; also when there is no update folder yet.
       }
-      return Optional.of(result);
+      return result;
     }
   }
 
@@ -192,6 +189,7 @@ public final class Installation {
 
   private void start(Download download, Plan.Mode mode, Path jar) throws IOException {
     Plan.format(jar); // also rejects a JAR that holds the helper's classes but is the app's own
+    Path app = this.app.toRealPath(); // the helper renames this, not a link to it
     Path java = Path.of(System.getProperty("java.home"));
     if (!Files.isRegularFile(java.resolve("bin").resolve(JAVA))) {
       throw new IOException(java + " has no bin/" + JAVA + " to run the helper with; jpackage"
@@ -201,7 +199,7 @@ public final class Installation {
     Files.deleteIfExists(updates.resolve("result.properties"));
     Files.deleteIfExists(updates.resolve("confirmed.properties"));
     Path copy = Files.createDirectory(updates.resolve("helper-" + System.currentTimeMillis()));
-    if (java.toRealPath().startsWith(app.toRealPath())) {
+    if (java.toRealPath().startsWith(app)) {
       // A runtime in the app's folder is replaced with it: on Windows its open files would keep
       // the folder from being renamed, and on Linux the helper would find the new version's.
       copy(java, copy.resolve("runtime"));
@@ -280,41 +278,9 @@ public final class Installation {
     });
   }
 
-  /**
-   * Deletes, as far as it can, what in {@code folder} is named {@code prefix} and a number of at
-   * least {@code min}.
-   */
-  private static void deleteAll(Path folder, String prefix, long min) {
-    Pattern name = Pattern.compile(Pattern.quote(prefix) + "(\\d{1,18})");
-    try (DirectoryStream<Path> found = Files.newDirectoryStream(folder, p -> {
-      Matcher m = name.matcher(p.getFileName().toString());
-      return m.matches() && Long.parseLong(m.group(1)) >= min;
-    })) {
-      for (Path p : found) {
-        try {
-          delete(p);
-        } catch (IOException e) {
-          // Tried again at the next call.
-        }
-      }
-    } catch (IOException e) {
-      // Also when there is no such folder.
-    }
-  }
-
-  /** Deletes a file or folder, and of a link or a Windows junction in it only the link. */
+  /** Deletes a copy of the helper: a folder core built, with links only as links. */
   private static void delete(Path root) throws IOException {
     Files.walkFileTree(root, new SimpleFileVisitor<>() {
-      @Override
-      public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-          throws IOException {
-        if (attrs.isOther()) { // a junction, which walkFileTree would enter
-          Files.delete(dir);
-          return FileVisitResult.SKIP_SUBTREE;
-        }
-        return FileVisitResult.CONTINUE;
-      }
-
       @Override
       public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
         Files.delete(file);

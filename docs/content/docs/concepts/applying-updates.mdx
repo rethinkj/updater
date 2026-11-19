@@ -48,7 +48,7 @@ The download stays where it is; the app deletes it, for instance once `result()`
 - It writes the plan and starts the helper in that folder. The helper prints nothing; should its JVM fail to start, what it says ends up in `helper.log` in the update folder.
 - On Linux the helper runs in a session of its own, through `setsid`, so that it outlives the terminal the app was started from.
 
-With the result, `result()` deletes what the update left behind: the helper's copy, and what the helper built beside the app's folder since the plan, an unfinished new version and, once the update is applied, the old version. If the app's folder is missing, it leaves the old version where it is. A copy of the helper that Windows still holds open is deleted at a later call.
+Once no helper is at work, `result()` deletes the helper's copies. One that Windows still holds open, while the helper exits, is deleted at a later call.
 
 One process at a time uses an update folder: a second call to start the helper from the same process throws, and two copies of the app must not share one.
 
@@ -57,10 +57,11 @@ One process at a time uses an update folder: a second call to start the helper f
 1. It checks the download's SHA-256 again, since hours may pass between the download and the app's exit.
 2. It builds the new version beside the app's folder, as `<app>.new-<n>`, and carries over the files that belong to the user, not to the app.
 3. It renames `<app>` to `<app>.backup-<n>`, and `<app>.new-<n>` to `<app>`. If the second rename fails, it renames the backup back.
+4. Once the new version is in place, it deletes the backup, and of a link or a Windows junction in it only the link.
 
 While a rename fails, because another process has a file open, such as a virus scanner on Windows, the helper tries again for 30 seconds before it gives up, with the reason `locked`. A single JAR is replaced the same way: the new JAR is written beside it, then the two are renamed.
 
-If the helper is ended before the renames, when the user logs off for instance, nothing has changed. If it is ended between the two renames, or cannot rename the old version back, the app's folder is missing and the old version is in `<app>.backup-<n>`. The old version also stays there after an update, until `result()` deletes it.
+If the helper is ended before the renames, when the user logs off for instance, nothing has changed. If it is ended between the two renames, or cannot rename the old version back, the app's folder is missing and the old version is in `<app>.backup-<n>`. What the helper cannot delete, as a file that Windows holds open, stays beside the app's folder, where it is in the way of nothing.
 
 ## The app's own files
 

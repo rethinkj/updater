@@ -45,7 +45,7 @@ public final class Helper {
     try {
       Plan plan = Plan.read(file);
       ProcessHandle.of(plan.pid()).ifPresent(app -> app.onExit().join());
-      Replace.apply(plan, LOCKED_FOR);
+      Replace.delete(Replace.apply(plan, LOCKED_FOR)); // the old version, before the result
       return report(folder, "applied", null, "Replaced " + plan.app() + " with " + plan.file());
     } catch (Plan.Rejected e) {
       return report(folder, "rejected", e.reason, e.getMessage());

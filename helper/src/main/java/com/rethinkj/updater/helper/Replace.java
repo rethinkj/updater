@@ -3,15 +3,17 @@ package com.rethinkj.updater.helper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.Set;
@@ -44,7 +46,7 @@ final class Replace {
 
   /**
    * Replaces {@code plan.app()} with the version in {@code plan.file()}, and keeps the old version
-   * as {@code <app>.backup-<n>}.
+   * as {@code <app>.backup-<n>}, whose path it returns.
    *
    * <p>For an archive, a file of the old folder that its list does not name, such as settings the
    * app keeps there, is carried over into the new one, also in place of a file the new version
@@ -58,7 +60,7 @@ final class Replace {
    * @throws IOException if the new version cannot be built, so that nothing changed, or if the old
    *     version cannot be put back, and stays in {@code <app>.backup-<n>}
    */
-  static void apply(Plan plan, Duration lockedFor) throws Plan.Rejected, RolledBack, IOException {
+  static Path apply(Plan plan, Duration lockedFor) throws Plan.Rejected, RolledBack, IOException {
     Path app = plan.app();
     boolean archive = plan.kind() == Plan.Kind.ARCHIVE;
     if (archive ? !Files.isDirectory(app) : !Files.isRegularFile(app)) {
@@ -89,6 +91,7 @@ final class Replace {
     } finally {
       delete(next); // after a swap, nothing is left there
     }
+    return backup;
   }
 
   /**
@@ -200,12 +203,38 @@ final class Replace {
     }
   }
 
-  /** Deletes a folder the helper built, as far as it can; what is left beside the app is inert. */
-  private static void delete(Path folder) {
-    try (Stream<Path> paths = Files.walk(folder)) {
-      for (Path p : paths.sorted(Comparator.reverseOrder()).toList()) {
-        Files.deleteIfExists(p);
-      }
+  /**
+   * Deletes a version beside the app, as far as it can; what is left there is inert. Of a link or a
+   * Windows junction in it, it deletes only the link.
+   */
+  static void delete(Path version) {
+    try {
+      Files.walkFileTree(version, new SimpleFileVisitor<>() {
+        @Override
+        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+            throws IOException {
+          if (attrs.isOther()) { // a junction, which walkFileTree would enter
+            Files.delete(dir);
+            return FileVisitResult.SKIP_SUBTREE;
+          }
+          return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+          Files.delete(file);
+          return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult postVisitDirectory(Path dir, IOException e) throws IOException {
+          if (e != null) {
+            throw e;
+          }
+          Files.delete(dir);
+          return FileVisitResult.CONTINUE;
+        }
+      });
     } catch (IOException e) {
       // Also when there is no such folder, after a swap.
     }

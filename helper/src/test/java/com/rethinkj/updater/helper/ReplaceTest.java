@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,6 +18,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -69,7 +71,7 @@ class ReplaceTest {
           "bin/app\nconf/app.properties\nlib/app.jar\n",
           Files.readString(app.resolve(Replace.LIST)));
     }
-    assertEquals("1.2.0", Files.readString(backup(app).resolve("bin/app")));
+    assertNothingBeside(app); // the old version is deleted once the new one is in place
   }
 
   @Test
@@ -81,7 +83,7 @@ class ReplaceTest {
 
     assertEquals("applied", result.getProperty("status"));
     assertEquals("1.3.0", Files.readString(app));
-    assertEquals("1.2.0", Files.readString(backup(app)));
+    assertNothingBeside(app);
   }
 
   @Test
@@ -119,6 +121,25 @@ class ReplaceTest {
         () -> Replace.swap(app, temp.resolve("missing"), backup, Duration.ZERO));
 
     assertOldVersionAlone(app);
+  }
+
+  @Test
+  void deletesAnOldVersionButNotWhatALinkInItLeadsTo() throws Exception {
+    Path backup =
+        write(temp, "Bücher App.backup-1/bin/app", "1.2.0").getParent().getParent();
+    Path outside = write(temp, "outside/data", "mine").getParent();
+    Path link = backup.resolve("data");
+    if (File.separatorChar == '\\') { // a junction: no rights needed, and walkFileTree enters it
+      String[] mklink = {"cmd", "/c", "mklink", "/J", link.toString(), outside.toString()};
+      assertEquals(0, new ProcessBuilder(mklink).start().waitFor());
+    } else {
+      Files.createSymbolicLink(link, outside);
+    }
+
+    Replace.delete(backup);
+
+    assertFalse(Files.exists(backup));
+    assertEquals("mine", Files.readString(outside.resolve("data")));
   }
 
   @Test
@@ -165,12 +186,13 @@ class ReplaceTest {
     }
   }
 
-  private static Path backup(Path app) throws IOException {
+  private static void assertNothingBeside(Path app) throws IOException {
     try (Stream<Path> files = Files.list(app.getParent())) {
-      return files
-          .filter(p -> p.getFileName().toString().startsWith(app.getFileName() + ".backup-"))
-          .findFirst()
-          .orElseThrow();
+      assertEquals(
+          List.of(),
+          files
+              .filter(p -> p.getFileName().toString().startsWith(app.getFileName() + "."))
+              .toList());
     }
   }
 
