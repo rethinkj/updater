@@ -168,6 +168,14 @@ final class Replace {
         if (listed == null && Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
           continue; // without a list, the old version's files are not told from the user's
         }
+        // A link of the user's, carried over before, may sit where a link of the new version leads.
+        Path parent = target.getParent();
+        while (Files.notExists(parent, LinkOption.NOFOLLOW_LINKS)) {
+          parent = parent.getParent();
+        }
+        if (!parent.toRealPath().startsWith(root)) {
+          throw new IOException(file + " would be carried over out of " + next);
+        }
         Files.createDirectories(target.getParent());
         Files.copy(
             file,
