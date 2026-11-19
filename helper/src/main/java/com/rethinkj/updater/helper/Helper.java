@@ -7,18 +7,21 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 /**
  * The helper process: {@code java -jar rethinkj-updater-helper.jar <plan>}, where {@code <plan>}
  * is the path of {@code plan.properties} in the app's update folder. It waits until the app has
- * exited and replaces it. What it did, it writes into {@code result.properties} in the same
- * folder; it prints nothing.
+ * exited and replaces it. With the plan's mode {@code restart} it starts the new version and waits
+ * for {@code confirmed.properties} in the same folder; without it, it puts the old version back
+ * and starts that. What it did, it writes into {@code result.properties} in the same folder; it
+ * prints nothing.
  *
  * <p>{@code java -jar rethinkj-updater-helper.jar list <folder>} writes the list of the app's own
  * files into a built app's folder, before it is packed.
- *
- * <p>So far it does not start the app again.
  */
 public final class Helper {
 
@@ -42,27 +45,106 @@ public final class Helper {
 
   static int run(Path file) {
     Path folder = file.toAbsolutePath().getParent();
+    Plan plan = null;
+    boolean running = false; // whether the version in place runs, started and confirmed
+    String status = "applied";
+    String reason = null;
+    String message;
     try {
-      Plan plan = Plan.read(file);
+      plan = Plan.read(file);
       ProcessHandle.of(plan.pid()).ifPresent(app -> app.onExit().join());
-      Replace.delete(Replace.apply(plan, LOCKED_FOR)); // the old version, before the result
-      return report(folder, "applied", null, "Replaced " + plan.app() + " with " + plan.file());
+      Path backup = Replace.apply(plan, LOCKED_FOR);
+      message = "Replaced " + plan.app() + " with " + plan.file();
+      if (plan.mode() == Plan.Mode.RESTART) {
+        running = startConfirmed(plan, folder);
+        if (!running) {
+          Replace.rollBack(plan.app(), backup, LOCKED_FOR);
+          status = "rolled-back";
+          reason = "not-confirmed";
+          message = "The new version did not confirm within "
+              + plan.confirmWithin().toSeconds() + " s that it runs, or exited before, so "
+              + plan.app() + " holds the old one again";
+        }
+      }
+      if (status.equals("applied")) {
+        Replace.delete(backup);
+      }
     } catch (Plan.Rejected e) {
-      return report(folder, "rejected", e.reason, e.getMessage());
+      status = "rejected";
+      reason = e.reason;
+      message = e.getMessage();
     } catch (Replace.RolledBack e) {
-      return report(folder, "rolled-back", e.reason, e.getMessage());
+      status = "rolled-back";
+      reason = e.reason;
+      message = e.getMessage();
     } catch (Exception e) { // also a RuntimeException from a broken archive
-      return report(folder, "rejected", "failed", e.toString());
+      status = "rejected";
+      reason = "failed";
+      message = e.toString();
     }
-  }
-
-  private static int report(Path folder, String status, String reason, String message) {
     try {
       writeResult(folder, status, reason, message);
     } catch (IOException ignored) {
       // Nowhere is left to report it but the exit code.
     }
+    // After the result, which the version it starts reads.
+    if (plan != null && plan.mode() == Plan.Mode.RESTART && !running) {
+      try {
+        start(plan, folder);
+      } catch (IOException ignored) {
+        // Such as when the app's folder is missing; the result says why.
+      }
+    }
     return status.equals("applied") ? 0 : 1;
+  }
+
+  /** Starts the version in place with the plan's command. */
+  private static Process start(Plan plan, Path folder) throws IOException {
+    return new ProcessBuilder(plan.command())
+        .directory(folder.toFile()) // not the app's folder, which a rollback renames
+        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+        .redirectError(ProcessBuilder.Redirect.DISCARD)
+        .start();
+  }
+
+  /**
+   * Starts the new version and waits until it writes {@code confirmed.properties}. If it does not
+   * within the plan's time, or exits before, it ends the new version and returns false.
+   */
+  private static boolean startConfirmed(Plan plan, Path folder) throws InterruptedException {
+    Path confirmed = folder.resolve("confirmed.properties");
+    Process app;
+    try {
+      Files.deleteIfExists(confirmed);
+      app = start(plan, folder);
+    } catch (IOException e) {
+      return false; // such as when the new version no longer has the command's launcher
+    }
+    long end = System.nanoTime() + plan.confirmWithin().toNanos();
+    while (true) {
+      boolean exited = !app.isAlive(); // before the check: it may confirm and then exit
+      if (Files.exists(confirmed)) {
+        return true;
+      }
+      if (exited || System.nanoTime() - end >= 0) {
+        stop(app);
+        return false;
+      }
+      Thread.sleep(100);
+    }
+  }
+
+  /**
+   * Ends the app and every process it started, and waits for them, so that none of them holds a
+   * file of the new version open: on Windows, a jpackage launcher starts itself again as its child.
+   */
+  private static void stop(Process app) {
+    List<ProcessHandle> all =
+        Stream.concat(Stream.of(app.toHandle()), app.descendants()).toList();
+    all.forEach(ProcessHandle::destroyForcibly);
+    for (ProcessHandle p : all) {
+      p.onExit().completeOnTimeout(p, LOCKED_FOR.toSeconds(), TimeUnit.SECONDS).join();
+    }
   }
 
   /**

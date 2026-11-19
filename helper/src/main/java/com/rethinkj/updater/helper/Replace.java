@@ -96,6 +96,24 @@ final class Replace {
   }
 
   /**
+   * Puts the old version in {@code backup} back in place of the app, after the new version did not
+   * confirm that it runs, and deletes the new version.
+   *
+   * @throws IOException if the new version stays in place, or the app's folder is missing
+   */
+  static void rollBack(Path app, Path backup, Duration lockedFor) throws IOException {
+    Path failed = app.resolveSibling(app.getFileName() + ".new-" + System.currentTimeMillis());
+    try {
+      swap(app, backup, failed, lockedFor);
+    } catch (Plan.Rejected | RolledBack e) {
+      throw new IOException(
+          "The old version in " + backup + " cannot take the new one's place: " + e.getMessage(),
+          e);
+    }
+    delete(failed);
+  }
+
+  /**
    * Renames {@code app} to {@code backup} and {@code next} to {@code app}, each tried again while
    * it fails until {@code lockedFor} has passed. If the second fails, it renames {@code backup}
    * back.

@@ -31,9 +31,9 @@ import java.util.Properties;
  * app names the same one: there core and the helper exchange the files of the documentation's page
  * "Helper files".
  *
- * <p>The app calls {@link #result()} when it starts, {@link #writable()} before it downloads an
- * update, and {@link #restart(Download)} or {@link #replaceOnExit(Download)} with the download.
- * One process at a time uses an update folder.
+ * <p>The app calls {@link #result()} when it starts and {@link #confirm()} once it is ready for
+ * use, {@link #writable()} before it downloads an update, and {@link #restart(Download)} or {@link
+ * #replaceOnExit(Download)} with the download. One process at a time uses an update folder.
  */
 public final class Installation {
 
@@ -160,9 +160,24 @@ public final class Installation {
   }
 
   /**
-   * Starts the helper, which replaces the app with {@code download} once this process has exited.
-   * The app exits next, as soon as it safely can. So far the helper does not start it again, and
-   * this does what {@link #replaceOnExit(Download)} does.
+   * Tells the helper that started this version that it runs, so that the helper keeps it rather
+   * than putting the old version back. Call it at every start, once the app is ready for use, such
+   * as after it has shown its first frame; without a helper waiting, it does nothing.
+   *
+   * @throws IOException if the confirmation cannot be written
+   */
+  public void confirm() throws IOException {
+    if (Files.exists(updates.resolve("plan.properties"))
+        && !Files.exists(updates.resolve("result.properties"))) {
+      Files.writeString(updates.resolve("confirmed.properties"), "format=1\n");
+    }
+  }
+
+  /**
+   * Starts the helper, which replaces the app with {@code download} once this process has exited,
+   * and then starts it again with the command. The app exits next, as soon as it safely can. If
+   * the new version does not {@link #confirm()} within two minutes, or exits before, the helper
+   * puts the old version back and starts that.
    *
    * @throws IllegalStateException if this installation has no command, or this process has
    *     started a helper already
@@ -242,8 +257,12 @@ public final class Installation {
           "-jar",
           helperJar.toString(),
           plan.toString()));
+      ProcessBuilder builder = new ProcessBuilder(helperCommand);
+      // Set by a jpackage launcher on Linux: a launcher the helper starts would take it for its
+      // own restart and skip its configuration, so the app would not start.
+      builder.environment().remove("_JPACKAGE_LAUNCHER");
       try {
-        new ProcessBuilder(helperCommand)
+        builder
             .directory(copy.toFile()) // not the app's folder, which it renames
             .redirectErrorStream(true)
             .redirectOutput(updates.resolve("helper.log").toFile()) // only if its JVM fails

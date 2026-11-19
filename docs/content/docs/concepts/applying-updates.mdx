@@ -5,7 +5,7 @@ description: How the app's files are replaced once it has exited.
 
 A running app cannot reliably replace its own files, least of all on Windows, where open files are locked. So the app hands its verified download to a small helper process (`rethinkj-updater-helper`) and exits. The helper waits until the app has exited and replaces its files, so that the app's folder holds either the old or the new version in full.
 
-An update can come as an archive of the whole app (zip or tar.gz), as a single JAR, or, later, as a native installer that the helper runs. So far the helper replaces an archive or a JAR. It does not start the app again yet.
+An update can come as an archive of the whole app (zip or tar.gz), as a single JAR, or, later, as a native installer that the helper runs. So far the helper replaces an archive or a JAR. If the app asks for it, the helper starts the new version and keeps it only once it confirms that it runs.
 
 core and the helper work together through files in an update folder the app names; [Helper files](/docs/reference/helper-files) describes them.
 
@@ -25,6 +25,11 @@ When the app starts, `result()` reports what the helper did with the last update
 ```java snippet="result"
 ```
 
+Once the app is ready for use, it confirms that it runs. A version the helper has just started is kept only if it does; at any other start this does nothing. Confirm after the app has shown its first frame rather than as it starts, so that a version whose window fails to come up is rolled back:
+
+```java snippet="confirm"
+```
+
 Before it downloads an update, the app asks whether the user may write to its folder and the folder above it. Without that, the helper cannot replace the app, and asking for rights is not implemented yet:
 
 ```java snippet="writable"
@@ -36,7 +41,7 @@ With the [download](/docs/get-started/check-for-updates#download-and-verify), th
 ```
 
 - `replaceOnExit(download)`: the helper waits until the app exits, whenever that is, replaces it and does not start it again.
-- `restart(download)`: the app exits next, as soon as it safely can. The helper is to replace it and start it again with the command, but so far it only replaces it, as with `replaceOnExit`.
+- `restart(download)`: the app exits next, as soon as it safely can. The helper replaces it and starts the new version with the command. If that version does not confirm within two minutes, or exits before, the helper ends it with every process it started, puts the old version back and starts that. If the helper changed nothing, because a file stayed locked for instance, it starts the old version as well. The result is written before, so the version it starts can report it.
 
 The download stays where it is; the app deletes it, for instance once `result()` reports.
 
@@ -48,6 +53,8 @@ The download stays where it is; the app deletes it, for instance once `result()`
 - It writes the plan and starts the helper in that folder. The helper prints nothing; should its JVM fail to start, what it says ends up in `helper.log` in the update folder.
 - On Linux the helper runs in a session of its own, through `setsid`, so that it outlives the terminal the app was started from.
 
+The command comes from the installed version and starts the new one, in the update folder as its working directory. Its process must run as long as the app does, as a jpackage launcher does; a script that starts the app and exits counts as an app that exited. If a new version renames its launcher, the command finds no launcher, and every update to it is rolled back.
+
 Once no helper is at work, `result()` deletes the helper's copies. One that Windows still holds open, while the helper exits, is deleted at a later call.
 
 One process at a time uses an update folder: a second call to start the helper from the same process throws, and two copies of the app must not share one.
@@ -57,7 +64,8 @@ One process at a time uses an update folder: a second call to start the helper f
 1. It checks the download's SHA-256 again, since hours may pass between the download and the app's exit.
 2. It builds the new version beside the app's folder, as `<app>.new-<n>`, and carries over the files that belong to the user, not to the app.
 3. It renames `<app>` to `<app>.backup-<n>`, and `<app>.new-<n>` to `<app>`. If the second rename fails, it renames the backup back.
-4. Once the new version is in place, it deletes the backup, and of a link or a Windows junction in it only the link.
+4. With `restart`, it starts the new version and waits for its confirmation. Without one, it renames the new version aside and the backup back to `<app>`, the same way, and deletes the new version.
+5. Once the new version is in place, and with `restart` has confirmed, it deletes the backup, and of a link or a Windows junction in it only the link.
 
 While a rename fails, because another process has a file open, such as a virus scanner on Windows, the helper tries again for 30 seconds before it gives up, with the reason `locked`. A single JAR is replaced the same way: the new JAR is written beside it, then the two are renamed.
 
