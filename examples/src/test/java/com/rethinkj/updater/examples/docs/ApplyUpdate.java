@@ -10,6 +10,7 @@ import com.rethinkj.updater.Update;
 import com.rethinkj.updater.Version;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -36,9 +37,14 @@ public final class ApplyUpdate {
     // docs:end installation
 
     // docs:start result
+    Path downloads = installation.updates().resolve("downloads");
     Optional<Installation.Result> last = installation.result();
-    last.ifPresent(result -> System.out.println(
-        "The last update: " + result.status() + " " + result.reason() + ", " + result.message()));
+    if (last.isPresent()) {
+      Installation.Result result = last.get();
+      System.out.println(
+          "The last update: " + result.status() + " " + result.reason() + ", " + result.message());
+      delete(downloads); // the helper is done with them
+    }
     // docs:end result
 
     // docs:start confirm
@@ -66,13 +72,23 @@ public final class ApplyUpdate {
     Asset archive = latest
         .asset(Pattern.compile(WINDOWS ? ".*-windows-x64\\.zip" : ".*-linux-x64\\.tar\\.gz"))
         .orElseThrow(() -> new IOException("No archive for this platform in " + latest.tag()));
-    Files.createDirectories(installation.updates());
-    Download download =
-        new Downloader().download(latest, archive, installation.updates(), received -> {});
+    Download download = new Downloader()
+        .download(latest, archive, Files.createDirectories(downloads), received -> {});
     // docs:end download-archive
 
     // docs:start apply
     installation.restart(download);
     // docs:end apply
+  }
+
+  /** Deletes the files in {@code folder}, if it exists. */
+  private static void delete(Path folder) throws IOException {
+    if (Files.isDirectory(folder)) {
+      try (DirectoryStream<Path> files = Files.newDirectoryStream(folder)) {
+        for (Path file : files) {
+          Files.delete(file);
+        }
+      }
+    }
   }
 }

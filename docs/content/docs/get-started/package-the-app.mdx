@@ -3,7 +3,7 @@ title: Package the app
 description: How to build an app image that the helper can update, write its file list and pack it for a release.
 ---
 
-An update is the whole app: the folder that jpackage builds, packed as a tar.gz on Linux and as a zip on Windows. Before it is packed, the folder gets the list of its own files, so that the helper can tell them from files the user keeps there. The installer that brings the first version is made from the same folder, so the first installation has the list too. The example app [`ApplyUpdate`](https://github.com/rethinkj/updater/blob/main/examples/src/test/java/com/rethinkj/updater/examples/docs/ApplyUpdate.java) is built, packed and updated this way in the CI, on both platforms.
+An update is the whole app: the folder that jpackage builds, packed as a tar.gz on Linux and as a zip on Windows. Before it is packed, the folder gets the list of its own files, so that the helper can tell them from files the user keeps there. The first installation can be the same archive, unpacked into a folder the user may write to, such as `%LOCALAPPDATA%\MyApp` or `~/.local/share/MyApp`, so that it has the list too. The example app [`ApplyUpdate`](https://github.com/rethinkj/updater/blob/main/examples/src/test/java/com/rethinkj/updater/examples/docs/ApplyUpdate.java) is built, packed and updated this way in the CI, on both platforms.
 
 ## Build the image
 
@@ -31,13 +31,13 @@ On Linux:
 tar -czf myapp-1.3.0-linux-x64.tar.gz -C dist MyApp
 ```
 
-On Windows, with the `tar.exe` that Windows brings, which writes a zip for a name that ends in `.zip`:
+On Windows, with the `tar.exe` that Windows brings, which writes a zip for a name that ends in `.zip`, here with its names in UTF-8, as Java reads them:
 
 ```sh
-tar.exe -a -cf myapp-1.3.0-windows-x64.zip -C dist MyApp
+tar.exe -a --options zip:hdrcharset=UTF-8 -cf myapp-1.3.0-windows-x64.zip -C dist MyApp
 ```
 
-The archive holds the folder `MyApp/`, whose contents the helper makes the app's folder. To make the installer of a first installation, run jpackage once more with `--type deb`, `rpm`, `msi` or `exe` and `--app-image dist/MyApp`.
+The archive holds the folder `MyApp/`, whose contents the helper makes the app's folder.
 
 ## Publish it
 

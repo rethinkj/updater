@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.spi.ToolProvider;
 import java.util.stream.Stream;
@@ -55,6 +56,7 @@ class ApplyUpdateTest {
   Path temp;
 
   private HttpServer server;
+  private final AtomicInteger listed = new AtomicInteger(); // requests for the releases
   private Path app;
   private Path updates;
 
@@ -82,15 +84,12 @@ class ApplyUpdateTest {
     Files.copy(Path.of(helper.getJarFileURL().toURI()), input.resolve("helper.jar"));
   }
 
-  /** On Windows the temporary folder can be deleted only once no process runs from it. */
   @AfterEach
   void stop() throws InterruptedException {
+    waitForTheApp();
     if (server != null) {
       server.stop(0);
     }
-    waitFor(() -> ProcessHandle.allProcesses()
-        .noneMatch(
-            p -> p.info().command().filter(c -> c.startsWith(temp.toString())).isPresent()));
   }
 
   @Test
@@ -114,8 +113,13 @@ class ApplyUpdateTest {
     assertEquals(0, old.waitFor());
     Path log = temp.resolve("app.log");
     waitFor(() -> read(log).contains("ROLLED_BACK not-confirmed"));
+    waitForTheApp();
+    assertEquals(1, listed.get(), "the old version looked for the update again");
     assertEquals("1.2.0", Files.readString(app.resolve("version.txt")));
     assertNothingBeside();
+    try (Stream<Path> downloads = Files.list(updates.resolve("downloads"))) {
+      assertEquals(List.of(), downloads.toList());
+    }
   }
 
   /**
@@ -130,6 +134,8 @@ class ApplyUpdateTest {
       run(
           Path.of(System.getenv("SystemRoot"), "System32", "tar.exe").toString(),
           "-a",
+          "--options",
+          "zip:hdrcharset=UTF-8",
           "-cf",
           archive.toString(),
           "-C",
@@ -188,6 +194,7 @@ class ApplyUpdateTest {
     String sums = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
         + "  " + ARCHIVE + "\n";
     server.createContext("/api/v3/repos/rethinkj/buecher-app/releases", exchange -> {
+      listed.incrementAndGet();
       try (InputStream in = getClass().getResourceAsStream("/github/app-releases.json")) {
         send(
             exchange,
@@ -216,6 +223,13 @@ class ApplyUpdateTest {
     exchange.sendResponseHeaders(200, body.length);
     exchange.getResponseBody().write(body);
     exchange.close();
+  }
+
+  /** Waits until no process runs from the temporary folder, which Windows can delete only then. */
+  private void waitForTheApp() throws InterruptedException {
+    waitFor(() -> ProcessHandle.allProcesses()
+        .noneMatch(
+            p -> p.info().command().filter(c -> c.startsWith(temp.toString())).isPresent()));
   }
 
   /** Asserts that no version is left beside the app's folder. */
