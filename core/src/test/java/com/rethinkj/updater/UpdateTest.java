@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -37,6 +38,33 @@ class UpdateTest {
     assertEquals(
         List.of("Notes of 1.3.0", "Notes of 1.2.0"),
         update.releases().stream().map(Release::notes).toList());
+  }
+
+  @Test
+  void offersOnlyThePreReleasesOfTheChosenChannel() {
+    List<Release> releases = new ArrayList<>(List.of(
+        release("0.1.0", false),
+        release("0.2.0-nightly.202611190300", true),
+        release("0.2.0-nightly.202611200300", true),
+        release("0.3.0-beta.1", true),
+        release("1.0.0", true))); // marked as a pre-release, but its version names no channel
+    Version installed = Version.parse("0.2.0-nightly.202611190300");
+
+    assertEquals(
+        List.of("0.2.0-nightly.202611200300"),
+        versions(Update.find(installed, releases, "nightly").orElseThrow()));
+    // Stable offers no step back to 0.1.0, only a release above the installed nightly.
+    assertTrue(Update.find(installed, releases).isEmpty());
+    releases.add(release("0.2.0", false));
+    assertEquals(List.of("0.2.0"), versions(Update.find(installed, releases).orElseThrow()));
+    // A release ranks above the nightlies of its version.
+    assertEquals(
+        List.of("0.2.0", "0.2.0-nightly.202611200300"),
+        versions(Update.find(installed, releases, "nightly").orElseThrow()));
+  }
+
+  private static List<String> versions(Update update) {
+    return update.releases().stream().map(r -> r.version().toString()).toList();
   }
 
   @Test

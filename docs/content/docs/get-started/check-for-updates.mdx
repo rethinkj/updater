@@ -12,7 +12,7 @@ A [source](/docs/concepts/sources) lists the published releases. Without a token
 ```java snippet="source"
 ```
 
-`Update.find` compares them with the installed version. It returns an update only if a release is newer; pre-releases are left out.
+`Update.find` compares them with the installed version. It returns an update only if a release is newer; pre-releases are left out unless the app chooses a [channel](/docs/concepts/release-notes#channels).
 
 ```java snippet="find"
 ```
