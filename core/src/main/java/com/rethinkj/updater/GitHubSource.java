@@ -238,7 +238,7 @@ public final class GitHubSource implements Source {
     }
     try {
       // Parses an address without asking DNS, and refuses a name such as 127.example.com.
-      return InetAddress.ofLiteral(host.replaceAll("(?:^\\[)|(?:]$)", "")).isLoopbackAddress();
+      return InetAddress.ofLiteral(host.replaceFirst("^\\[(.*)]$", "$1")).isLoopbackAddress();
     } catch (IllegalArgumentException _) {
       return false;
     }

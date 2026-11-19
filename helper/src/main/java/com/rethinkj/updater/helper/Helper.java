@@ -66,7 +66,6 @@ public final class Helper {
     String status = APPLIED;
     String reason = null;
     String message;
-    boolean interrupted = false;
     try {
       plan = Plan.read(file);
       ProcessHandle.of(plan.pid()).ifPresent(app -> app.onExit().join());
@@ -96,11 +95,6 @@ public final class Helper {
       status = "rolled-back";
       reason = e.reason;
       message = e.getMessage();
-    } catch (InterruptedException e) {
-      interrupted = true;
-      status = REJECTED;
-      reason = "failed";
-      message = e.toString();
     } catch (Exception e) { // NOPMD: also a RuntimeException from a broken archive
       status = REJECTED;
       reason = "failed";
@@ -117,10 +111,6 @@ public final class Helper {
     // The version that ran before, once the result is there, which it reads.
     if (reported && plan != null && plan.mode() == Plan.Mode.RESTART && !running && !unconfirmed) {
       startOld(plan, folder);
-    }
-    // Only now: on an interrupted thread, writing the result could fail.
-    if (interrupted) {
-      Thread.currentThread().interrupt();
     }
     return status.equals(APPLIED) ? 0 : 1;
   }
@@ -145,9 +135,10 @@ public final class Helper {
 
   /**
    * Starts the new version and waits until it writes {@code confirmed.properties}. If it does not
-   * within the plan's time, or exits before, it ends the new version and returns false.
+   * within the plan's time, or exits before, or the helper is interrupted, it ends the new version
+   * and returns false.
    */
-  private static boolean startConfirmed(Plan plan, Path folder) throws InterruptedException {
+  private static boolean startConfirmed(Plan plan, Path folder) {
     Path confirmed = folder.resolve("confirmed.properties");
     Process app;
     try {
@@ -171,7 +162,13 @@ public final class Helper {
         stop(started);
         return false;
       }
-      Thread.sleep(100);
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException _) {
+        Thread.currentThread().interrupt(); // then it rolls back, as if the version did not confirm
+        stop(started);
+        return false;
+      }
     }
   }
 

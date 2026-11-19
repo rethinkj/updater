@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -54,7 +53,7 @@ class InstallationTest {
     Download download = new Download(temp.resolve("download.zip"), "0".repeat(64));
 
     try (FileChannel lock = FileChannel.open(updates.resolve("helper.lock"), CREATE, WRITE);
-        FileLock _ = lock.lock()) {
+        var _ = lock.lock()) {
       assertThrows(IllegalStateException.class, () -> installation.replaceOnExit(download));
     }
     assertFalse(Files.exists(updates.resolve("plan.properties")));

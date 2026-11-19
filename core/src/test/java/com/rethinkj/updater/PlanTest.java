@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -55,7 +54,7 @@ class PlanTest {
     manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
     manifest.getMainAttributes().put(new Attributes.Name(Plan.FORMATS), formats);
     Path jar = Files.createTempFile(folder, "helper-", ".jar");
-    try (OutputStream _ = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
+    try (var _ = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
       // only the manifest
     }
     return jar;
