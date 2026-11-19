@@ -59,12 +59,12 @@ public final class Downloader {
    *
    * @param progress told the number of bytes received so far, each time more arrive; the total is
    *     {@link Asset#size()}
-   * @return the verified file; the caller deletes it once it is no longer needed
+   * @return the verified file and its checksum
    * @throws InterruptedIOException if the thread was interrupted, which leaves it interrupted
    * @throws IOException if no checksum is known for the file, it does not match, or the download
    *     fails. No file is left behind.
    */
-  public Path download(Release release, Asset asset, Path folder, LongConsumer progress)
+  public Download download(Release release, Asset asset, Path folder, LongConsumer progress)
       throws IOException {
     String expected = checksum(release, asset);
     // The name comes from the server: keep only what is safe in a file name on every platform.
@@ -80,7 +80,7 @@ public final class Downloader {
         throw new IOException(asset.name() + " does not match its checksum: expected " + expected
             + ", received " + actual);
       }
-      return file;
+      return new Download(file, actual);
     } catch (Throwable e) { // also an Error, say from progress: the path never reaches the caller
       try {
         Files.deleteIfExists(file);

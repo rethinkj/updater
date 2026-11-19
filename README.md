@@ -8,7 +8,7 @@ A library that keeps Java apps up to date on Windows and Linux. It finds new rel
 
 ## Status
 
-Little is implemented yet: versions, reading GitHub releases, finding the update, and downloading it with SHA-256 verification. The version is `0.1.0-SNAPSHOT`, published from `main` to Maven Central's snapshot repository; [Installation](https://updater.rethinkj.com/docs/get-started) shows how to depend on it. It targets Windows 11 and Linux on x64, with JDK 25.
+Little is implemented yet: versions, reading GitHub releases, finding the update, downloading it with SHA-256 verification, and replacing the app's files once it has exited. The version is `0.1.0-SNAPSHOT`, published from `main` to Maven Central's snapshot repository; [Installation](https://updater.rethinkj.com/docs/get-started) shows how to depend on it. It targets Windows 11 and Linux on x64, with JDK 25.
 
 ## What it is meant to do
 
