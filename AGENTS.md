@@ -39,7 +39,7 @@ mvn -pl helper -am verify         # one module plus the modules it depends on
 mvn spotless:apply                # format; mvn verify fails on a file that is not formatted
 ```
 
-`mvn verify` also fails on a finding of PMD, or of its copy-paste detector within a module, with the rules in `config/pmd/rules.xml`. A finding the code cannot avoid gets `// NOPMD: <why>` on its line. `config/pmd/baseline.properties` lets the classes listed there off the design rules named beside them; it only shrinks.
+`mvn verify` also fails on a finding of PMD, or of its copy-paste detector within a module, with the rules in `config/pmd/rules.xml`. A PMD finding the code cannot avoid gets `// NOPMD: <why>` on its line; a duplicate CPD finds is removed, not marked. `config/pmd/baseline.properties` lets the classes listed there off the design rules named beside them; it only shrinks.
 
 The site, with Node 24 in `docs/`: `npm ci`, then `npm run build`.
 
