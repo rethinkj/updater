@@ -3,29 +3,30 @@ title: Installation
 description: How to add rethinkj Updater to a Maven project.
 ---
 
-rethinkj Updater needs JDK 25 and runs on Windows 11 and later and on Linux, both on x64. So far it only checks for updates and downloads them, and no artifact is published, so for now the only way to depend on it is to build it yourself.
-
-## Build it
-
-With JDK 25 and Maven 3.9 or later:
-
-```sh
-git clone https://github.com/rethinkj/updater.git
-cd updater
-mvn install
-```
-
-This puts the artifacts in your local Maven repository (`~/.m2`).
+rethinkj Updater needs JDK 25 and runs on Windows 11 and later and on Linux, both on x64. So far it only checks for updates and downloads them. There is no release yet: SNAPSHOTs are published from `main` to Maven Central's snapshot repository. A SNAPSHOT changes with each push, the API with it, and Central removes SNAPSHOTs after 90 days.
 
 ## Depend on it
 
 ```xml title="pom.xml"
-<dependency>
-  <groupId>com.rethinkj.updater</groupId>
-  <artifactId>rethinkj-updater-core</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
-</dependency>
+<repositories>
+  <repository>
+    <id>central-snapshots</id>
+    <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+    <releases><enabled>false</enabled></releases>
+    <snapshots><enabled>true</enabled></snapshots>
+  </repository>
+</repositories>
+
+<dependencies>
+  <dependency>
+    <groupId>com.rethinkj.updater</groupId>
+    <artifactId>rethinkj-updater-core</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </dependency>
+</dependencies>
 ```
+
+It comes with a sources and a Javadoc JAR, which IDEs pick up. To build it yourself instead, run `mvn install` in a clone of the [repository](https://github.com/rethinkj/updater), with Maven 3.9 or later; that puts the same version in your local Maven repository (`~/.m2`).
 
 `rethinkj-updater-helper` is the separate process that applies an update. How an app ships it alongside itself is not decided yet; see [Applying updates](/docs/concepts/applying-updates).
 

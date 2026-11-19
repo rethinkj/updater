@@ -48,6 +48,8 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>25</maven.compiler.release>
+    <!-- The Javadoc JAR is built only where it is published: -Djavadoc.jar.skip=false. -->
+    <javadoc.jar.skip>true</javadoc.jar.skip>
   </properties>
 
   <dependencyManagement>
@@ -116,6 +118,35 @@
               <goals>
                 <goal>jar-no-fork</goal>
               </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <!-- The API documentation. A JAR of it beside the classes, which Central wants for a
+               release; core and helper declare it. -->
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>3.12.0</version>
+          <configuration>
+            <!-- A missing comment is not an error; a broken link or bad HTML is. -->
+            <doclint>all,-missing</doclint>
+            <failOnWarnings>true</failOnWarnings>
+            <doctitle>rethinkj Updater ${project.version}</doctitle>
+            <windowtitle>rethinkj Updater ${project.version}</windowtitle>
+            <bottom>rethinkj Updater, MIT License</bottom>
+            <quiet>true</quiet>
+          </configuration>
+          <executions>
+            <execution>
+              <id>attach-javadocs</id>
+              <!-- Off unless javadoc.jar.skip=false, as the publishing jobs set it: verify and
+                   install stay as fast as without. -->
+              <phase>package</phase>
+              <goals>
+                <goal>jar</goal>
+              </goals>
+              <configuration>
+                <skip>${javadoc.jar.skip}</skip>
+              </configuration>
             </execution>
           </executions>
         </plugin>

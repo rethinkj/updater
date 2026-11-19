@@ -1,0 +1,1 @@
+- `rethinkj-updater-core` and `rethinkj-updater-helper` can be used as SNAPSHOTs from Maven Central's snapshot repository (`https://central.sonatype.com/repository/maven-snapshots/`), published from `main`, each with a sources and a Javadoc JAR. [Installation](https://updater.rethinkj.com/docs/get-started) shows the repository to add.
