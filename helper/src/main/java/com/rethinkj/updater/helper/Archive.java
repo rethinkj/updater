@@ -14,7 +14,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
@@ -34,8 +36,10 @@ final class Archive {
     /**
      * @param mode the entry's Unix permissions, or -1 in a zip, which {@code java.util.zip} does not
      *     tell
+     * @param link the target of a symbolic link in a tar, or null
      */
-    void visit(String name, boolean folder, int mode, InputStream data) throws IOException;
+    void visit(String name, boolean folder, int mode, String link, InputStream data)
+        throws IOException;
   }
 
   /**
@@ -43,9 +47,15 @@ final class Archive {
    * folder, such as {@code myapp-1.3.0/}, its contents end up in {@code target}. Files from a tar
    * keep their permissions, except that only their owner may write them.
    *
+   * <p>A symbolic link in a tar stays a link, as long as it leads to a file or folder in {@code
+   * target}, such as those jlink makes between the legal notices of a runtime. A link in a zip
+   * comes out as a file holding the link's target, since {@code java.util.zip} cannot tell it from
+   * one.
+   *
    * <p>It writes nothing if an entry would lead out of {@code target}, through {@code ..}, an
-   * absolute path or a drive letter, or if it is a link or a special file. A link in a zip comes out
-   * as a file holding the link's target, since {@code java.util.zip} cannot tell it from one.
+   * absolute path or a drive letter, if a link's target does so, or if it is a hard link or a
+   * special file. A link that leads out only through another link, or to nothing, is found once
+   * the links are written.
    *
    * @param target a folder that does not exist yet; it may hold part of the archive if writing
    *     fails
@@ -54,17 +64,30 @@ final class Archive {
   static void extract(Path archive, Path target) throws IOException {
     // A single top folder is one name ending in "/"; a file at the top is one without.
     Set<String> tops = new HashSet<>();
-    read(archive, (name, folder, mode, data) -> {
+    Map<String, String> links = new LinkedHashMap<>(); // the names of the links, and their targets
+    read(archive, (name, folder, mode, link, data) -> {
       List<String> parts = parts(name);
       if (!parts.isEmpty()) {
         tops.add(folder || parts.size() > 1 ? parts.getFirst() + "/" : parts.getFirst());
       }
+      if (link != null) {
+        links.put(name, link);
+      }
     });
     int strip = tops.size() == 1 && tops.iterator().next().endsWith("/") ? 1 : 0;
     boolean posix = target.getFileSystem().supportedFileAttributeViews().contains("posix");
+    for (Map.Entry<String, String> link : links.entrySet()) {
+      List<String> parts = parts(link.getKey());
+      Path at = Path.of("", parts.subList(strip, parts.size()).toArray(String[]::new));
+      Path to = Path.of(link.getValue());
+      if (to.getRoot() != null || at.resolveSibling(to).normalize().startsWith("..")) {
+        throw new IOException(link.getKey() + " links out of the folder it is unpacked into");
+      }
+    }
 
     Files.createDirectory(target);
-    read(archive, (name, folder, mode, data) -> {
+    Map<Path, Path> made = new LinkedHashMap<>();
+    read(archive, (name, folder, mode, link, data) -> {
       List<String> parts = parts(name);
       if (parts.size() <= strip) {
         return;
@@ -82,12 +105,27 @@ final class Archive {
         return;
       }
       Files.createDirectories(file.getParent());
+      if (link != null) {
+        made.put(file, Path.of(link)); // written last, so that no entry is written through one
+        return;
+      }
       Files.copy(data, file);
       if (mode >= 0 && posix) {
         // Never writable by others: the helper may run with more rights than the user.
         Files.setPosixFilePermissions(file, permissions(mode & 0755));
       }
     });
+    for (Map.Entry<Path, Path> link : made.entrySet()) {
+      Files.createSymbolicLink(link.getKey(), link.getValue());
+    }
+    // Through another link, such as one to a folder further up, a link can still lead out.
+    Path root = target.toRealPath();
+    for (Path link : made.keySet()) {
+      if (!Files.exists(link) || !link.toRealPath().startsWith(root)) {
+        throw new IOException(target.relativize(link)
+            + " links out of the folder it is unpacked into, or to nothing");
+      }
+    }
   }
 
   /**
@@ -129,7 +167,7 @@ final class Archive {
     try (ZipFile zip = new ZipFile(archive.toFile())) {
       for (ZipEntry entry : Collections.list(zip.entries())) {
         try (InputStream data = zip.getInputStream(entry)) {
-          visitor.visit(entry.getName(), entry.isDirectory(), -1, data);
+          visitor.visit(entry.getName(), entry.isDirectory(), -1, null, data);
         }
       }
     }
@@ -154,8 +192,11 @@ final class Archive {
       String name = longName != null ? longName : name(header);
       longName = null;
       switch (type) {
-        case '0', '\0', '7' -> visitor.visit(name, false, (int) number(header, 100, 8), data);
-        case '5' -> visitor.visit(name, true, -1, data);
+        case '0', '\0', '7' -> visitor.visit(name, false, (int) number(header, 100, 8), null, data);
+        case '5' -> visitor.visit(name, true, -1, null, data);
+        // shortcut: a target over 100 bytes is rejected from GNU tar and, cut short, leads to
+        // nothing from PAX; read their long targets once an app has such a link.
+        case '2' -> visitor.visit(name, false, -1, string(header, 157, 100), data);
         case 'L' -> {
           byte[] bytes = data.readAllBytes();
           longName = string(bytes, 0, bytes.length);

@@ -1,0 +1,1 @@
+- `rethinkj-updater-helper` applies a tar.gz that holds symbolic links, as long as each leads to a file or folder in the app's folder. A jpackage or jlink image on Linux links the legal notices of its runtime this way, so the helper rejected such an image packed with a plain `tar czf`. Any other link is still rejected.

@@ -88,4 +88,5 @@ java -jar rethinkj-updater-helper.jar list <folder>
 - zip on Windows, tar.gz on Linux, where only tar keeps which files are executable.
 - If the archive holds a single folder at its top, such as `myapp-1.3.0/`, its contents become the app's folder.
 - Files from a tar keep their permissions, except that only their owner may write them, at most `0755`. Folders get the system's default permissions.
-- The helper rejects an archive that holds a link, a path that leads out of the app's folder, a sparse file or a file over 8 GB. A link in a zip comes out as a small file holding the link's target, since Java cannot tell the two apart in a zip.
+- A symbolic link in a tar stays a link if it leads to a file or folder in the app's folder, such as the links between the legal notices in the runtime of a jpackage or jlink image on Linux. A link in a zip comes out as a small file holding the link's target, since Java cannot tell the two apart in a zip.
+- The helper rejects an archive that holds any other link, a hard link, a path that leads out of the app's folder, a sparse file or a file over 8 GB.
