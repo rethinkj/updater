@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.DosFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -301,6 +302,10 @@ public final class Installation {
 
       @Override
       public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+        if (attrs instanceof DosFileAttributes dos && dos.isReadOnly()) {
+          // Else Windows refuses to delete it, such as the legal notices of a jlink runtime.
+          Files.setAttribute(file, "dos:readonly", false, LinkOption.NOFOLLOW_LINKS);
+        }
         Files.delete(file);
         return FileVisitResult.CONTINUE;
       }
