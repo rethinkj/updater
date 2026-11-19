@@ -139,7 +139,10 @@ public final class Installation {
       } else if (Files.exists(plan)) {
         return result; // a helper is at work, or was ended before it could report
       }
-      try (DirectoryStream<Path> copies = Files.newDirectoryStream(updates, "helper-*")) {
+      try (DirectoryStream<Path> copies = Files.newDirectoryStream(
+          updates,
+          p -> Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)
+              && p.getFileName().toString().matches("helper-\\d+"))) {
         for (Path copy : copies) {
           delete(copy);
         }
@@ -278,9 +281,19 @@ public final class Installation {
     });
   }
 
-  /** Deletes a copy of the helper: a folder core built, with links only as links. */
+  /** Deletes a copy of the helper, and of a link or a Windows junction in it only the link. */
   private static void delete(Path root) throws IOException {
     Files.walkFileTree(root, new SimpleFileVisitor<>() {
+      @Override
+      public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+          throws IOException {
+        if (attrs.isOther()) { // a junction, which walkFileTree would enter
+          Files.delete(dir);
+          return FileVisitResult.SKIP_SUBTREE;
+        }
+        return FileVisitResult.CONTINUE;
+      }
+
       @Override
       public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
         Files.delete(file);

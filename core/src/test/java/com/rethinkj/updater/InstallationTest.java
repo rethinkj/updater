@@ -22,7 +22,8 @@ class InstallationTest {
     Path app = folder(temp.resolve("Bücher App"));
     Path updates = folder(temp.resolve("updates"));
     Path copy = folder(updates.resolve("helper-1"));
-    Path beside = folder(temp.resolve("Bücher App.backup-1")); // the user's, or the helper's
+    Path beside = folder(temp.resolve("Bücher App.backup-" + System.currentTimeMillis()));
+    Path download = folder(updates.resolve("helper-notes")); // the app's, not a copy
     Installation installation = new Installation(app, updates, List.of());
 
     Files.writeString(updates.resolve("plan.properties"), "format=1\n");
@@ -30,15 +31,14 @@ class InstallationTest {
     assertTrue(Files.exists(copy), "deleted while the helper is at work");
 
     Files.writeString(
-        updates.resolve("result.properties"),
-        "format=1\nstatus=rolled-back\nreason=not-confirmed\nmessage=Back to 1.2.0\n");
+        updates.resolve("result.properties"), "format=1\nstatus=applied\nmessage=Replaced\n");
     assertEquals(
-        Optional.of(new Installation.Result(
-            Installation.Result.Status.ROLLED_BACK, "not-confirmed", "Back to 1.2.0")),
+        Optional.of(new Installation.Result(Installation.Result.Status.APPLIED, "", "Replaced")),
         installation.result());
     assertEquals(Optional.empty(), installation.result());
     assertFalse(Files.exists(copy));
-    assertTrue(Files.exists(beside.resolve("file")));
+    assertTrue(Files.exists(beside.resolve("file")), "the helper deletes what it built");
+    assertTrue(Files.exists(download.resolve("file")));
   }
 
   /** A folder with a file in it. */
