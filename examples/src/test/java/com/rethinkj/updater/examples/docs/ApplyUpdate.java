@@ -10,6 +10,7 @@ import com.rethinkj.updater.Update;
 import com.rethinkj.updater.Version;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -87,7 +88,7 @@ public final class ApplyUpdate {
       for (Path file : files) {
         Files.deleteIfExists(file);
       }
-    } catch (IOException e) {
+    } catch (IOException | DirectoryIteratorException e) {
       // What is left is deleted after the next update; also when there is no such folder yet.
     }
   }
