@@ -213,6 +213,9 @@ public final class Installation {
       // the folder from being renamed, and on Linux the helper would find the new version's.
       copy(java, copy.resolve("runtime"));
       java = copy.resolve("runtime");
+      if (!Files.isExecutable(java.resolve("bin").resolve(JAVA))) {
+        throw new IOException(java + " cannot run the helper; is " + updates + " mounted noexec?");
+      }
     }
     Path helperJar = Files.copy(jar, copy.resolve("rethinkj-updater-helper.jar"));
     Plan.Kind kind = Files.isDirectory(app) ? Plan.Kind.ARCHIVE : Plan.Kind.JAR;
