@@ -41,7 +41,7 @@ With the [download](/docs/get-started/check-for-updates#download-and-verify), th
 ```
 
 - `replaceOnExit(download)`: the helper waits until the app exits, whenever that is, replaces it and does not start it again.
-- `restart(download)`: the app exits next, as soon as it safely can. The helper replaces it and starts the new version with the command. If that version does not confirm within two minutes, or exits before, the helper ends it with every process it started, puts the old version back and starts that. If the helper changed nothing, because a file stayed locked for instance, it starts the old version as well. It writes the result before it starts the old version, so that version reports it at once; a new version that confirmed reports `APPLIED` at its next start, since the helper writes it once the confirmation arrives.
+- `restart(download)`: the app exits next, as soon as it safely can. The helper replaces it and starts the new version with the command. If that version does not confirm within two minutes, or exits before, the helper ends it with every process it started, puts the old version back and starts that. A process it cannot see, because it was started and orphaned between two of the helper's checks a tenth of a second apart, outlives the rollback. If the helper changed nothing, because a file stayed locked for instance, it starts the old version as well. It writes the result before it starts the old version, so that version reports it at once; a new version that confirmed reports `APPLIED` at its next start, since the helper writes it once the confirmation arrives.
 
 The download stays where it is; the app deletes it, for instance once `result()` reports.
 
