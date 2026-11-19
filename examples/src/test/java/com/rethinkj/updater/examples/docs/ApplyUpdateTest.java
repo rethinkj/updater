@@ -1,0 +1,168 @@
+package com.rethinkj.updater.examples.docs;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.rethinkj.updater.Download;
+import com.rethinkj.updater.Installation;
+import java.io.File;
+import java.io.IOException;
+import java.net.JarURLConnection;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.function.BooleanSupplier;
+import java.util.spi.ToolProvider;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+/**
+ * Updates an app image that jpackage built, with its own runtime, through its launcher: the way
+ * an app ships, on Linux and Windows alike.
+ */
+class ApplyUpdateTest {
+
+  private static final boolean WINDOWS = File.separatorChar == '\\';
+
+  @TempDir
+  static Path shared;
+
+  private static Path runtime;
+  private static Path input;
+
+  @TempDir
+  Path temp;
+
+  private Path app;
+  private Path updates;
+
+  /** A runtime of java.base alone, and the JARs the app ships with. */
+  @BeforeAll
+  static void prepare() throws Exception {
+    runtime = shared.resolve("runtime");
+    tool("jlink", "--add-modules", "java.base", "--output", runtime.toString());
+    input = Files.createDirectories(shared.resolve("input"));
+    Path classes = Path.of(
+        ApplyUpdate.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+    tool(
+        "jar",
+        "--create",
+        "--file",
+        input.resolve("examples.jar").toString(),
+        "-C",
+        classes.toString(),
+        ".");
+    Path core = Path.of(
+        Installation.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+    Files.copy(core, input.resolve("core.jar"));
+    var helper =
+        (JarURLConnection) ClassLoader.getSystemResource("com/rethinkj/updater/helper/Helper.class")
+            .openConnection();
+    Files.copy(Path.of(helper.getJarFileURL().toURI()), input.resolve("helper.jar"));
+  }
+
+  /** On Windows the temporary folder can be deleted only once no process runs from it. */
+  @AfterEach
+  void waitForProcesses() throws InterruptedException {
+    waitFor(() -> ProcessHandle.allProcesses()
+        .noneMatch(
+            p -> p.info().command().filter(c -> c.startsWith(temp.toString())).isPresent()));
+  }
+
+  @Test
+  void replacesTheAppOnceItHasExitedAndReportsItAtTheNextStart() throws Exception {
+    Process old = updateTo("1.3.0");
+
+    assertEquals(0, old.waitFor());
+    Path result = updates.resolve("result.properties");
+    waitFor(() -> Files.exists(result));
+    Installation.Result reported =
+        new Installation(app, updates, List.of()).result().orElseThrow();
+    assertEquals(Installation.Result.Status.APPLIED, reported.status(), reported::message);
+    assertEquals("1.3.0", Files.readString(app.resolve("version.txt")));
+    try (Stream<Path> beside = Files.list(temp)) {
+      assertEquals(List.of(), beside.filter(p -> p.toString().contains("App.")).toList());
+    }
+  }
+
+  /**
+   * Builds version 1.2.0 and starts it through its launcher, to update to {@code version}: a zip
+   * that holds only {@code version.txt}, as the rest of the app is carried over without a list.
+   */
+  private Process updateTo(String version) throws Exception {
+    tool(
+        "jpackage",
+        "--type",
+        "app-image",
+        "--name",
+        "Bücher App",
+        "--dest",
+        temp.toString(),
+        "--input",
+        input.toString(),
+        "--main-jar",
+        "examples.jar",
+        "--main-class",
+        App.class.getName(),
+        "--runtime-image",
+        runtime.toString());
+    app = temp.resolve("Bücher App");
+    Files.writeString(app.resolve("version.txt"), "1.2.0");
+    updates = Files.createDirectories(temp.resolve("Bücher App updates"));
+    Path zip = updates.resolve("download-" + version + ".zip");
+    try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(zip))) {
+      out.putNextEntry(new ZipEntry("version.txt"));
+      out.write(version.getBytes(UTF_8));
+    }
+    String sha256 = HexFormat.of()
+        .formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(zip)));
+    Path launcher = app.resolve(WINDOWS ? "Bücher App.exe" : "bin/Bücher App");
+    return new ProcessBuilder(launcher.toString(), zip.toString(), sha256)
+        .redirectErrorStream(true)
+        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+        .start();
+  }
+
+  private void waitFor(BooleanSupplier condition) throws InterruptedException {
+    for (long end = System.nanoTime() + 60_000_000_000L; !condition.getAsBoolean(); ) {
+      assertTrue(
+          System.nanoTime() < end,
+          () -> "Timed out; the helper said: " + read(updates.resolve("helper.log")));
+      Thread.sleep(100);
+    }
+  }
+
+  private static void tool(String name, String... args) {
+    assertEquals(0, ToolProvider.findFirst(name).orElseThrow().run(System.out, System.err, args));
+  }
+
+  private static String read(Path file) {
+    try {
+      return Files.readString(file);
+    } catch (IOException e) {
+      return "nothing";
+    }
+  }
+
+  /**
+   * The app in the image: {@link ApplyUpdate}, with the update folder beside the app's. Started
+   * with a download's file and checksum, it updates.
+   */
+  public static final class App {
+
+    public static void main(String[] args) throws IOException {
+      Path app = Installation.launcher(Path.of("")).orElseThrow().app(); // for the folder only
+      Path updates = app.resolveSibling(app.getFileName() + " updates");
+      Download download = args.length == 2 ? new Download(Path.of(args[0]), args[1]) : null;
+      ApplyUpdate.start(updates, download);
+    }
+  }
+}

@@ -1,0 +1,1 @@
+- `Downloader.download` returns a `Download` with the file and its verified SHA-256 checksum instead of the file alone, so that the helper checks the file against the checksum it was downloaded with.

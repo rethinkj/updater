@@ -67,8 +67,9 @@ class CheckForUpdateTest {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     GitHubSource source = new GitHubSource(URI.create(base + "api/v3/"), "cli/cli", null);
 
-    Path file =
-        CheckForUpdate.check(source, folder, new PrintStream(out, true, UTF_8)).orElseThrow();
+    Path file = CheckForUpdate.check(source, folder, new PrintStream(out, true, UTF_8))
+        .orElseThrow()
+        .file();
 
     assertArrayEquals(ARCHIVE, Files.readAllBytes(file));
     String notes = out.toString(UTF_8);
@@ -82,8 +83,9 @@ class CheckForUpdateTest {
   @EnabledIfSystemProperty(named = "network.tests", matches = "true")
   void downloadsTheNewestFromGitHub() throws IOException {
     PrintStream nowhere = new PrintStream(OutputStream.nullOutputStream());
-    Path file =
-        CheckForUpdate.check(new GitHubSource("cli/cli"), folder, nowhere).orElseThrow();
+    Path file = CheckForUpdate.check(new GitHubSource("cli/cli"), folder, nowhere)
+        .orElseThrow()
+        .file();
     assertTrue(Files.size(file) > 0);
   }
 }

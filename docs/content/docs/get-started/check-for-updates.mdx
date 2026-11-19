@@ -26,9 +26,9 @@ A [source](/docs/concepts/sources) lists the published releases. Without a token
 
 ## Download and verify
 
-`latest()` is the release to update to. `asset` picks its file for this platform by a pattern for the whole name, and `Downloader` loads it into a new file in `folder` and returns it only if it matches its checksum. The last argument is told how many bytes have arrived, for a progress bar. See [Verification](/docs/concepts/verification) for where the checksum comes from and how to cancel.
+`latest()` is the release to update to. `asset` picks its file for this platform by a pattern for the whole name, and `Downloader` loads it into a new file in `folder` and returns it, with its checksum, only if it matches. The last argument is told how many bytes have arrived, for a progress bar. See [Verification](/docs/concepts/verification) for where the checksum comes from and how to cancel.
 
 ```java snippet="download"
 ```
 
-The file is the app's to delete once it is no longer needed. core cannot hand it to the helper that replaces the app's files yet; see [Applying updates](/docs/concepts/applying-updates).
+The file is the app's to delete once it is no longer needed. To install it, the app hands the download to the helper; see [Applying updates](/docs/concepts/applying-updates).

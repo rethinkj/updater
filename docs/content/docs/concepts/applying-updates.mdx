@@ -3,21 +3,65 @@ title: Applying updates
 description: How the app's files are replaced once it has exited.
 ---
 
-A running app cannot reliably replace its own files, least of all on Windows, where open files are locked. So the app starts a small helper process (`rethinkj-updater-helper`) and exits. The helper waits until the app has exited and replaces its files, so that the app's folder holds either the old or the new version in full.
+A running app cannot reliably replace its own files, least of all on Windows, where open files are locked. So the app hands its verified download to a small helper process (`rethinkj-updater-helper`) and exits. The helper waits until the app has exited and replaces its files, so that the app's folder holds either the old or the new version in full.
 
-An update can come as an archive of the whole app (zip or tar.gz), as a single JAR, or, later, as a native installer that the helper runs. So far the helper replaces an archive or a JAR. It does not start the app again yet, and core does not start the helper yet.
+An update can come as an archive of the whole app (zip or tar.gz), as a single JAR, or, later, as a native installer that the helper runs. So far the helper replaces an archive or a JAR. It does not start the app again yet.
 
-core and the helper work together through files in a folder the app names; [Helper files](/docs/reference/helper-files) describes them.
+core and the helper work together through files in an update folder the app names; [Helper files](/docs/reference/helper-files) describes them.
+
+## From the app
+
+Ship the helper JAR with the app, on its class path: add `rethinkj-updater-helper` beside `rethinkj-updater-core`, with the same version. The app never calls it; core finds it there and starts it.
+
+`Installation` stands for the installed app: its folder, or its JAR if the app is a single JAR, and the update folder, which lies outside the app's folder and is the same for every version, such as `updates` in `%LOCALAPPDATA%\MyApp`. An app started by a launcher that jpackage built gets both from the launcher:
+
+```java snippet="installation"
+```
+
+Otherwise `new Installation(app, updates, command)` names the app's folder, the update folder and the command that starts the app.
+
+When the app starts, `result()` reports what the helper did with the last update, once. Its `status()` is `APPLIED`, `ROLLED_BACK` or `REJECTED`, and `reason()` is one of the [reason codes](/docs/reference/helper-files#result):
+
+```java snippet="result"
+```
+
+Before it downloads an update, the app asks whether the user may write to its folder and the folder above it. Without that, the helper cannot replace the app, and asking for rights is not implemented yet:
+
+```java snippet="writable"
+```
+
+With the [download](/docs/get-started/check-for-updates#download-and-verify), the app starts the helper:
+
+```java snippet="apply"
+```
+
+- `replaceOnExit(download)`: the helper waits until the app exits, whenever that is, replaces it and does not start it again.
+- `restart(download)`: the app exits next, as soon as it safely can. The helper is to replace it and start it again with the command, but so far it only replaces it, as with `replaceOnExit`.
+
+The download stays where it is; the app deletes it, for instance once `result()` reports.
+
+### How core starts the helper
+
+- It takes the helper JAR from the app's class path, or from its module path if the module `com.rethinkj.updater.helper` is resolved, for instance with `--add-modules`. `withHelper(jar)` names it instead. A JAR whose manifest does not list the plan formats is not run.
+- It copies the JAR into a new folder `helper-<n>` in the update folder. If the app runs on a runtime in its own folder, as a jpackage or jlink image does, it copies that runtime there as well and starts the helper on the copy. Otherwise the helper runs on the app's runtime.
+- The runtime needs `bin/java`, `bin\java.exe` on Windows. jpackage leaves it out of the runtime it builds, unless `--jlink-options` are given without `--strip-native-commands`, such as `--jlink-options "--strip-debug --no-man-pages --no-header-files"`. Without it, starting the helper throws.
+- It writes the plan and starts the helper in that folder. The helper prints nothing; should its JVM fail to start, what it says ends up in `helper.log` in the update folder.
+- On Linux the helper runs in a session of its own, through `setsid`, so that it outlives the terminal the app was started from.
+
+Once no helper is at work, `result()` deletes the helper's copies. One that Windows still holds open, while the helper exits, is deleted at a later call.
+
+One process at a time uses an update folder: a second call to start the helper from the same process throws, and two copies of the app must not share one.
 
 ## How the helper replaces an app
 
 1. It checks the download's SHA-256 again, since hours may pass between the download and the app's exit.
 2. It builds the new version beside the app's folder, as `<app>.new-<n>`, and carries over the files that belong to the user, not to the app.
 3. It renames `<app>` to `<app>.backup-<n>`, and `<app>.new-<n>` to `<app>`. If the second rename fails, it renames the backup back.
+4. Once the new version is in place, it deletes the backup, and of a link or a Windows junction in it only the link.
 
 While a rename fails, because another process has a file open, such as a virus scanner on Windows, the helper tries again for 30 seconds before it gives up, with the reason `locked`. A single JAR is replaced the same way: the new JAR is written beside it, then the two are renamed.
 
-If the helper is ended before the renames, when the user logs off for instance, nothing has changed. If it is ended between the two renames, or cannot rename the old version back, the app's folder is missing and the old version is in `<app>.backup-<n>`. For now the old version stays there after an update, too.
+If the helper is ended before the renames, when the user logs off for instance, nothing has changed. If it is ended between the two renames, or cannot rename the old version back, the app's folder is missing and the old version is in `<app>.backup-<n>`. What the helper cannot delete, as a file that Windows holds open, stays beside the app's folder, where it is in the way of nothing.
 
 ## The app's own files
 

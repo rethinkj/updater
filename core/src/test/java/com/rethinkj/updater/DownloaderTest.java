@@ -95,7 +95,8 @@ class DownloaderTest {
     Asset app = asset("app.zip", sha256(APP));
     List<Long> progress = new ArrayList<>();
 
-    Path file = new Downloader().download(release(app), app, folder, progress::add);
+    Path file =
+        new Downloader().download(release(app), app, folder, progress::add).file();
 
     assertArrayEquals(APP, Files.readAllBytes(file));
     assertEquals(folder, file.getParent());
@@ -105,9 +106,10 @@ class DownloaderTest {
   @Test
   void verifiesWithAChecksumFileOfTheRelease() throws IOException {
     Asset app = asset("app.zip", "");
-    Path file =
+    Download download =
         new Downloader().download(release(app, asset("SHA256SUMS", "")), app, folder, n -> {});
-    assertArrayEquals(APP, Files.readAllBytes(file));
+    assertArrayEquals(APP, Files.readAllBytes(download.file()));
+    assertEquals(sha256(APP), download.sha256()); // for the helper, which checks it again
   }
 
   @Test
@@ -168,7 +170,7 @@ class DownloaderTest {
         .orElseThrow()
         .latest();
     Asset sums = latest.asset(Pattern.compile(".*_checksums\\.txt")).orElseThrow();
-    Path file = new Downloader().download(latest, sums, folder, n -> {});
+    Path file = new Downloader().download(latest, sums, folder, n -> {}).file();
     assertEquals(sums.size(), Files.size(file));
   }
 

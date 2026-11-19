@@ -28,6 +28,6 @@ rethinkj Updater needs JDK 25 and runs on Windows 11 and later and on Linux, bot
 
 It comes with a sources and a Javadoc JAR, which IDEs pick up. To build it yourself instead, run `mvn install` in a clone of the [repository](https://github.com/rethinkj/updater), with Maven 3.9 or later; that puts the same version in your local Maven repository (`~/.m2`).
 
-`rethinkj-updater-helper` is the separate process that applies an update. How an app ships it alongside itself is not decided yet; see [Applying updates](/docs/concepts/applying-updates).
+`rethinkj-updater-helper` is the separate process that applies an update. An app that applies updates depends on it as well, with the same version, so that it ships on the class path; see [Applying updates](/docs/concepts/applying-updates).
 
 Next, [check for updates](/docs/get-started/check-for-updates) in a small app.

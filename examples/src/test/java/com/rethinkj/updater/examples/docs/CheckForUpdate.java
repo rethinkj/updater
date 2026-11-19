@@ -1,6 +1,7 @@
 package com.rethinkj.updater.examples.docs;
 
 import com.rethinkj.updater.Asset;
+import com.rethinkj.updater.Download;
 import com.rethinkj.updater.Downloader;
 import com.rethinkj.updater.GitHubSource;
 import com.rethinkj.updater.Release;
@@ -26,12 +27,13 @@ public final class CheckForUpdate {
     Source source = new GitHubSource("cli/cli");
     // docs:end source
     Path folder = Files.createTempDirectory("update-");
-    Optional<Path> file = check(source, folder, System.out);
-    System.out.println(file.map(f -> "Downloaded and verified " + f).orElse("Up to date"));
+    Optional<Download> download = check(source, folder, System.out);
+    System.out.println(
+        download.map(d -> "Downloaded and verified " + d.file()).orElse("Up to date"));
   }
 
   /** The newest release's verified archive in {@code folder}, or empty if there is none newer. */
-  static Optional<Path> check(Source source, Path folder, PrintStream out) throws IOException {
+  static Optional<Download> check(Source source, Path folder, PrintStream out) throws IOException {
     // docs:start find
     Version installed = Version.parse("2.103.1"); // the version this app runs
     Optional<Update> found = Update.find(installed, source.releases());
@@ -53,8 +55,8 @@ public final class CheckForUpdate {
     Asset archive = latest
         .asset(Pattern.compile("gh_.*_linux_amd64\\.tar\\.gz"))
         .orElseThrow(() -> new IOException("No archive for Linux x64 in " + latest.tag()));
-    Path file = new Downloader().download(latest, archive, folder, received -> {});
+    Download download = new Downloader().download(latest, archive, folder, received -> {});
     // docs:end download
-    return Optional.of(file);
+    return Optional.of(download);
   }
 }

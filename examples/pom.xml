@@ -26,6 +26,13 @@
       <artifactId>rethinkj-updater-core</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- Not called, but shipped with the app: core finds it on the class path and starts it. -->
+    <dependency>
+      <groupId>com.rethinkj.updater</groupId>
+      <artifactId>rethinkj-updater-helper</artifactId>
+      <version>${project.version}</version>
+      <scope>runtime</scope>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>

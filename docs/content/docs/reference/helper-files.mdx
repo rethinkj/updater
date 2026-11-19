@@ -14,7 +14,7 @@ So far the helper replaces the app, as [Applying updates](/docs/concepts/applyin
 | `result.properties` | update folder | the helper | core, when the app starts next |
 | `rethinkj-updater.files` | app folder | the build, or the helper after an update | the helper of a later update |
 
-The update folder is one the app names, outside its own folder, such as `%LOCALAPPDATA%\MyApp\updates`. The files in it have fixed names, so that a new version finds them although it did not write the plan.
+The update folder is one the app names, outside its own folder, such as `%LOCALAPPDATA%\MyApp\updates`. The files in it have fixed names, so that a new version finds them although it did not write the plan. core also keeps its copies of the helper there, in folders `helper-<n>`, which it deletes, and the output of a helper whose JVM fails in `helper.log`; neither is part of the contract, and the app keeps nothing of its own under these names.
 
 ## Rules
 
