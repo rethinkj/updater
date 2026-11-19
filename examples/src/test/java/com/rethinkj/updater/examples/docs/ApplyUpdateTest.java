@@ -1,99 +1,168 @@
 package com.rethinkj.updater.examples.docs;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.rethinkj.updater.Download;
 import com.rethinkj.updater.Installation;
 import java.io.File;
 import java.io.IOException;
+import java.net.JarURLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.spi.ToolProvider;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/**
+ * Updates an app image that jpackage built, with its own runtime, through its launcher: the way
+ * an app ships, on Linux and Windows alike.
+ */
 class ApplyUpdateTest {
 
   private static final boolean WINDOWS = File.separatorChar == '\\';
 
   @TempDir
+  static Path shared;
+
+  private static Path runtime;
+  private static Path input;
+
+  @TempDir
   Path temp;
 
+  private Path app;
+  private Path updates;
+
+  /** A runtime of java.base alone, and the JARs the app ships with. */
+  @BeforeAll
+  static void prepare() throws Exception {
+    runtime = shared.resolve("runtime");
+    tool("jlink", "--add-modules", "java.base", "--output", runtime.toString());
+    input = Files.createDirectories(shared.resolve("input"));
+    Path classes = Path.of(
+        ApplyUpdate.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+    tool(
+        "jar",
+        "--create",
+        "--file",
+        input.resolve("examples.jar").toString(),
+        "-C",
+        classes.toString(),
+        ".");
+    Path core = Path.of(
+        Installation.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+    Files.copy(core, input.resolve("core.jar"));
+    var helper =
+        (JarURLConnection) ClassLoader.getSystemResource("com/rethinkj/updater/helper/Helper.class")
+            .openConnection();
+    Files.copy(Path.of(helper.getJarFileURL().toURI()), input.resolve("helper.jar"));
+  }
+
+  /** On Windows the temporary folder can be deleted only once no process runs from it. */
+  @AfterEach
+  void waitForProcesses() throws InterruptedException {
+    waitFor(() -> ProcessHandle.allProcesses()
+        .noneMatch(
+            p -> p.info().command().filter(c -> c.startsWith(temp.toString())).isPresent()));
+  }
+
   @Test
-  void theHelperReplacesTheAppOnceItHasExitedAndCoreReportsIt() throws Exception {
-    // Version 1.2.0 as jpackage lays it out, with its own runtime in its folder.
-    Path app = temp.resolve("Bücher App");
-    Path runtime = app.resolve(WINDOWS ? "runtime" : "lib/runtime");
-    Path launcher = app.resolve(WINDOWS ? "Bücher App.exe" : "bin/Bücher App");
-    Files.createDirectories(runtime.getParent());
-    jlink(runtime);
-    Files.writeString(app.resolve("version.txt"), "1.2.0");
-    Path updates = Files.createDirectories(temp.resolve("Bücher App updates"));
-    Path zip = zip(updates.resolve("download-1.3.0.zip"), "version.txt", "1.3.0");
-    Path log = temp.resolve("app.log");
+  void replacesTheAppOnceItHasExitedAndReportsItAtTheNextStart() throws Exception {
+    Process old = updateTo("1.3.0");
 
-    Process process = new ProcessBuilder(
-            runtime.resolve("bin").resolve(WINDOWS ? "java.exe" : "java").toString(),
-            "-Djpackage.app-path=" + launcher,
-            "-cp",
-            System.getProperty("java.class.path"),
-            ApplyUpdate.class.getName(),
-            updates.toString(),
-            zip.toString(),
-            sha256(zip))
-        .redirectErrorStream(true)
-        .redirectOutput(log.toFile())
-        .start();
-    assertEquals(0, process.waitFor(), () -> read(log));
-
+    assertEquals(0, old.waitFor());
     Path result = updates.resolve("result.properties");
-    for (long end = System.nanoTime() + 60_000_000_000L; !Files.exists(result); ) {
-      assertTrue(
-          System.nanoTime() < end, () -> "No result; " + read(updates.resolve("helper.log")));
-      Thread.sleep(100);
-    }
-    Installation installation = new Installation(app, updates, List.of());
-    Installation.Result reported = installation.result().orElseThrow();
-
+    waitFor(() -> Files.exists(result));
+    Installation.Result reported =
+        new Installation(app, updates, List.of()).result().orElseThrow();
     assertEquals(Installation.Result.Status.APPLIED, reported.status(), reported::message);
     assertEquals("1.3.0", Files.readString(app.resolve("version.txt")));
     try (Stream<Path> beside = Files.list(temp)) {
-      assertEquals(
-          List.of(), beside.filter(p -> p.toString().contains(".backup-")).toList());
+      assertEquals(List.of(), beside.filter(p -> p.toString().contains("App.")).toList());
     }
   }
 
-  /** A runtime of java.base alone, which is all core needs to start the helper. */
-  private static void jlink(Path runtime) {
-    ToolProvider jlink = ToolProvider.findFirst("jlink").orElseThrow();
-    String[] args = {"--add-modules", "java.base", "--output", runtime.toString()};
-    assertEquals(0, jlink.run(System.out, System.err, args));
-  }
-
-  private static Path zip(Path zip, String name, String content) throws IOException {
+  /**
+   * Builds version 1.2.0 and starts it through its launcher, to update to {@code version}: a zip
+   * that holds only {@code version.txt}, as the rest of the app is carried over without a list.
+   */
+  private Process updateTo(String version) throws Exception {
+    tool(
+        "jpackage",
+        "--type",
+        "app-image",
+        "--name",
+        "Bücher App",
+        "--dest",
+        temp.toString(),
+        "--input",
+        input.toString(),
+        "--main-jar",
+        "examples.jar",
+        "--main-class",
+        App.class.getName(),
+        "--runtime-image",
+        runtime.toString());
+    app = temp.resolve("Bücher App");
+    Files.writeString(app.resolve("version.txt"), "1.2.0");
+    updates = Files.createDirectories(temp.resolve("Bücher App updates"));
+    Path zip = updates.resolve("download-" + version + ".zip");
     try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(zip))) {
-      out.putNextEntry(new ZipEntry(name));
-      out.write(content.getBytes());
+      out.putNextEntry(new ZipEntry("version.txt"));
+      out.write(version.getBytes(UTF_8));
     }
-    return zip;
+    String sha256 = HexFormat.of()
+        .formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(zip)));
+    Path launcher = app.resolve(WINDOWS ? "Bücher App.exe" : "bin/Bücher App");
+    return new ProcessBuilder(launcher.toString(), zip.toString(), sha256)
+        .redirectErrorStream(true)
+        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+        .start();
   }
 
-  private static String sha256(Path file) throws Exception {
-    MessageDigest digest = MessageDigest.getInstance("SHA-256");
-    return HexFormat.of().formatHex(digest.digest(Files.readAllBytes(file)));
+  private void waitFor(BooleanSupplier condition) throws InterruptedException {
+    for (long end = System.nanoTime() + 60_000_000_000L; !condition.getAsBoolean(); ) {
+      assertTrue(
+          System.nanoTime() < end,
+          () -> "Timed out; the helper said: " + read(updates.resolve("helper.log")));
+      Thread.sleep(100);
+    }
+  }
+
+  private static void tool(String name, String... args) {
+    assertEquals(0, ToolProvider.findFirst(name).orElseThrow().run(System.out, System.err, args));
   }
 
   private static String read(Path file) {
     try {
       return Files.readString(file);
     } catch (IOException e) {
-      return "no " + file;
+      return "nothing";
+    }
+  }
+
+  /**
+   * The app in the image: {@link ApplyUpdate}, with the update folder beside the app's. Started
+   * with a download's file and checksum, it updates.
+   */
+  public static final class App {
+
+    public static void main(String[] args) throws IOException {
+      Path app = Installation.launcher(Path.of("")).orElseThrow().app(); // for the folder only
+      Path updates = app.resolveSibling(app.getFileName() + " updates");
+      Download download = args.length == 2 ? new Download(Path.of(args[0]), args[1]) : null;
+      ApplyUpdate.start(updates, download);
     }
   }
 }

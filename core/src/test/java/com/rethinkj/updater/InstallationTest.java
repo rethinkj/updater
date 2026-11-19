@@ -19,22 +19,19 @@ class InstallationTest {
   Path temp;
 
   @Test
-  void reportsTheResultOnceAndDeletesWhatEarlierUpdatesLeftOnlyWhenNoHelperIsAtWork()
-      throws Exception {
-    Path app = file(temp.resolve("Bücher App/bin/app")).getParent().getParent();
-    Path updates = temp.resolve("updates");
+  void reportsTheResultOnceAndThenDeletesOnlyWhatTheHelperLeft() throws Exception {
+    Path app = folder(temp.resolve("Bücher App"));
+    Path updates = folder(temp.resolve("updates"));
+    long now = System.currentTimeMillis();
     List<Path> left = List.of(
-        file(temp.resolve("Bücher App.backup-1/bin/app")).getParent().getParent(),
-        file(temp.resolve("Bücher App.new-2/bin/app")).getParent().getParent(),
-        file(updates.resolve("helper-3/runtime/bin/java"))
-            .getParent()
-            .getParent()
-            .getParent());
+        folder(temp.resolve("Bücher App.backup-" + now)),
+        folder(temp.resolve("Bücher App.new-" + now)),
+        folder(updates.resolve("helper-" + now)));
     List<Path> kept = List.of(
-        file(temp.resolve("Bücher App.backup-x/bin/app")),
-        file(temp.resolve("Other App.new-2/bin/app")),
-        file(temp.resolve("outside/data")));
-    // A link in an old version to a folder outside: deleting the version keeps what is there.
+        folder(temp.resolve("Bücher App.backup-20261119")), // the user's, older than the plan
+        folder(temp.resolve("Other App.new-" + now)),
+        folder(temp.resolve("outside")));
+    // A link in the old version to a folder outside: deleting the version keeps what is there.
     link(left.getFirst().resolve("data"), temp.resolve("outside"));
     Installation installation = new Installation(app, updates, List.of());
 
@@ -43,21 +40,37 @@ class InstallationTest {
     left.forEach(p -> assertTrue(Files.exists(p), p + " is deleted while a helper is at work"));
 
     Files.writeString(
-        updates.resolve("result.properties"),
-        "format=1\nstatus=rolled-back\nreason=not-confirmed\nmessage=Back to 1.2.0\n");
+        updates.resolve("result.properties"), "format=1\nstatus=applied\nmessage=Replaced\n");
     assertEquals(
-        Optional.of(new Installation.Result(
-            Installation.Result.Status.ROLLED_BACK, "not-confirmed", "Back to 1.2.0")),
+        Optional.of(new Installation.Result(Installation.Result.Status.APPLIED, "", "Replaced")),
         installation.result());
     assertEquals(Optional.empty(), installation.result());
     left.forEach(p -> assertFalse(Files.exists(p), p + " is left"));
     kept.forEach(p -> assertTrue(Files.exists(p), p + " is deleted"));
-    assertTrue(Files.exists(app.resolve("bin/app")));
+    assertTrue(Files.exists(temp.resolve("outside/file")));
   }
 
-  private static Path file(Path file) throws IOException {
-    Files.createDirectories(file.getParent());
-    return Files.writeString(file, file.getFileName().toString());
+  @Test
+  void keepsTheOldVersionIfTheAppsFolderIsMissing() throws Exception {
+    Path updates = folder(temp.resolve("updates"));
+    Path backup = folder(temp.resolve("Bücher App.backup-" + System.currentTimeMillis()));
+    Files.writeString(updates.resolve("plan.properties"), "format=1\n");
+    Files.writeString(
+        updates.resolve("result.properties"),
+        "format=1\nstatus=rejected\nreason=failed\nmessage=The old version is in " + backup + "\n");
+
+    Installation installation = new Installation(temp.resolve("Bücher App"), updates, List.of());
+
+    assertEquals(
+        Installation.Result.Status.REJECTED, installation.result().orElseThrow().status());
+    assertTrue(Files.exists(backup.resolve("file")));
+  }
+
+  /** A folder with a file in it. */
+  private static Path folder(Path folder) throws IOException {
+    Files.createDirectories(folder);
+    Files.writeString(folder.resolve("file"), folder.getFileName().toString());
+    return folder;
   }
 
   /** A symbolic link, or on Windows a junction, which needs no rights to create. */

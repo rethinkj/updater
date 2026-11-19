@@ -13,13 +13,10 @@ import java.nio.file.Path;
 public final class ApplyUpdate {
 
   /**
-   * {@code ApplyUpdate <updates> <file> <sha256>}, with the update folder and the download as
-   * {@code Downloader} returns it.
+   * What the app does as it starts, with its update folder: it reports the last update. Given a
+   * download as {@code Downloader} returns it, it then starts the helper, and the app exits.
    */
-  public static void main(String[] args) throws IOException {
-    Path updates = Path.of(args[0]);
-    Download download = new Download(Path.of(args[1]), args[2]);
-
+  static void start(Path updates, Download download) throws IOException {
     // docs:start installation
     Installation installation = Installation.launcher(updates)
         .orElseThrow(() -> new IOException("Not started by a jpackage launcher"));
@@ -31,6 +28,10 @@ public final class ApplyUpdate {
         .ifPresent(result -> System.out.println("The last update: " + result.status() + " "
             + result.reason() + ", " + result.message()));
     // docs:end result
+
+    if (download == null) {
+      return;
+    }
 
     // docs:start writable
     if (!installation.writable()) {

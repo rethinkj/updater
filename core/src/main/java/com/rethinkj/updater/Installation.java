@@ -21,6 +21,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -32,6 +33,7 @@ import java.util.regex.Pattern;
  *
  * <p>The app calls {@link #result()} when it starts, {@link #writable()} before it downloads an
  * update, and {@link #restart(Download)} or {@link #replaceOnExit(Download)} with the download.
+ * One process at a time uses an update folder.
  */
 public final class Installation {
 
@@ -40,6 +42,12 @@ public final class Installation {
 
   private static final String HELPER_CLASS = "com/rethinkj/updater/helper/Helper.class";
   private static final boolean WINDOWS = File.separatorChar == '\\';
+  private static final String JAVA = WINDOWS ? "java.exe" : "java";
+
+  /** Lets this process start one helper, and not while it reads a result. */
+  private static final Object LOCK = new Object();
+
+  private static boolean started; // guarded by LOCK
 
   private final Path app;
   private final Path updates;
@@ -57,8 +65,8 @@ public final class Installation {
   }
 
   private Installation(Path app, Path updates, List<String> command, Path helper) {
-    this.app = app.toAbsolutePath();
-    this.updates = updates.toAbsolutePath();
+    this.app = app.toAbsolutePath().normalize();
+    this.updates = updates.toAbsolutePath().normalize();
     this.command = List.copyOf(command);
     this.helper = helper;
   }
@@ -85,7 +93,7 @@ public final class Installation {
    * resolved, for instance with {@code --add-modules}.
    */
   public Installation withHelper(Path jar) {
-    return new Installation(app, updates, command, jar.toAbsolutePath());
+    return new Installation(app, updates, command, jar.toAbsolutePath().normalize());
   }
 
   /** The app's folder, or its JAR file. */
@@ -110,34 +118,48 @@ public final class Installation {
    * What the helper reported about the last update, once: the report is deleted as it is read.
    * Empty if there is none, or while a helper is still at work.
    *
-   * <p>Unless a helper is at work, it also deletes what earlier updates left behind: the helper's
-   * copies in the update folder, and the app's old or unfinished versions beside its folder. What
-   * cannot be deleted yet, as a file still open on Windows, it tries again at the next call.
+   * <p>With the report, it deletes what the update left behind: the helper's copy in the update
+   * folder and, if the app's folder is in place, what the helper built beside it, an unfinished new
+   * version or, once the update is applied, the old version. A copy of the helper that Windows
+   * still holds open is deleted at a later call.
    *
    * @throws IOException if the report cannot be read or deleted
    */
   public Optional<Result> result() throws IOException {
-    Path file = updates.resolve("result.properties");
-    Path plan = updates.resolve("plan.properties");
-    Optional<Result> result = Optional.empty();
-    if (Files.exists(file)) {
-      result = Optional.of(Result.read(file));
+    synchronized (LOCK) {
+      Path file = updates.resolve("result.properties");
+      Path plan = updates.resolve("plan.properties");
+      if (!Files.exists(file)) {
+        if (!Files.exists(plan)) { // else a helper is at work, or was ended before it reported
+          deleteAll(updates, "helper-", 0);
+        }
+        return Optional.empty();
+      }
+      Result result = Result.read(file);
+      // The helper names what it builds by the time, after the plan: older names are not its own.
+      long since =
+          Files.exists(plan) ? Files.getLastModifiedTime(plan).toMillis() - 60_000 : Long.MAX_VALUE;
       Files.deleteIfExists(plan); // first: a plan without a result means a helper at work
       Files.delete(file);
-    } else if (Files.exists(plan)) {
-      return result; // a helper is at work, or was ended before it could report
+      deleteAll(updates, "helper-", 0);
+      if (Files.exists(app)) { // else the old version beside it may be the only one left
+        String name = app.getFileName().toString();
+        deleteAll(app.getParent(), name + ".new-", since);
+        if (result.status() == Result.Status.APPLIED) {
+          deleteAll(app.getParent(), name + ".backup-", since);
+        }
+      }
+      return Optional.of(result);
     }
-    String name = Pattern.quote(app.getFileName().toString());
-    deleteAll(updates, Pattern.compile("helper-\\d+"));
-    deleteAll(app.getParent(), Pattern.compile(name + "\\.(new|backup)-\\d+"));
-    return result;
   }
 
   /**
-   * Starts the helper, which replaces the app with {@code download} once this process has exited,
-   * and then starts it again with the command. The app exits next, as soon as it safely can.
+   * Starts the helper, which replaces the app with {@code download} once this process has exited.
+   * The app exits next, as soon as it safely can. So far the helper does not start it again, and
+   * this does what {@link #replaceOnExit(Download)} does.
    *
-   * @throws IllegalStateException if this installation has no command
+   * @throws IllegalStateException if this installation has no command, or this process has
+   *     started a helper already
    * @throws IOException if the helper cannot be found or started
    */
   public void restart(Download download) throws IOException {
@@ -151,6 +173,7 @@ public final class Installation {
    * Starts the helper, which replaces the app with {@code download} whenever this process exits,
    * and does not start it again.
    *
+   * @throws IllegalStateException if this process has started a helper already
    * @throws IOException if the helper cannot be found or started
    */
   public void replaceOnExit(Download download) throws IOException {
@@ -158,13 +181,26 @@ public final class Installation {
   }
 
   private void start(Download download, Plan.Mode mode) throws IOException {
-    Path jar = helper();
+    synchronized (LOCK) {
+      if (started) {
+        throw new IllegalStateException("A helper already waits for this process to exit");
+      }
+      start(download, mode, helper());
+      started = true;
+    }
+  }
+
+  private void start(Download download, Plan.Mode mode, Path jar) throws IOException {
     Plan.format(jar); // also rejects a JAR that holds the helper's classes but is the app's own
+    Path java = Path.of(System.getProperty("java.home"));
+    if (!Files.isRegularFile(java.resolve("bin").resolve(JAVA))) {
+      throw new IOException(java + " has no bin/" + JAVA + " to run the helper with; jpackage"
+          + " leaves it out unless its --jlink-options omit --strip-native-commands");
+    }
     Files.createDirectories(updates);
     Files.deleteIfExists(updates.resolve("result.properties"));
     Files.deleteIfExists(updates.resolve("confirmed.properties"));
-    Path copy = Files.createTempDirectory(updates, "helper-");
-    Path java = Path.of(System.getProperty("java.home"));
+    Path copy = Files.createDirectory(updates.resolve("helper-" + System.currentTimeMillis()));
     if (java.toRealPath().startsWith(app.toRealPath())) {
       // A runtime in the app's folder is replaced with it: on Windows its open files would keep
       // the folder from being renamed, and on Linux the helper would find the new version's.
@@ -190,7 +226,7 @@ public final class Installation {
       helperCommand.add("setsid");
     }
     helperCommand.addAll(List.of(
-        java.resolve("bin").resolve(WINDOWS ? "java.exe" : "java").toString(),
+        java.resolve("bin").resolve(JAVA).toString(),
         "-jar",
         helperJar.toString(),
         plan.toString()));
@@ -244,10 +280,16 @@ public final class Installation {
     });
   }
 
-  /** Deletes what in {@code folder} has a name {@code pattern} matches, as far as it can. */
-  private static void deleteAll(Path folder, Pattern pattern) {
-    try (DirectoryStream<Path> found = Files.newDirectoryStream(
-        folder, p -> pattern.matcher(p.getFileName().toString()).matches())) {
+  /**
+   * Deletes, as far as it can, what in {@code folder} is named {@code prefix} and a number of at
+   * least {@code min}.
+   */
+  private static void deleteAll(Path folder, String prefix, long min) {
+    Pattern name = Pattern.compile(Pattern.quote(prefix) + "(\\d{1,18})");
+    try (DirectoryStream<Path> found = Files.newDirectoryStream(folder, p -> {
+      Matcher m = name.matcher(p.getFileName().toString());
+      return m.matches() && Long.parseLong(m.group(1)) >= min;
+    })) {
       for (Path p : found) {
         try {
           delete(p);

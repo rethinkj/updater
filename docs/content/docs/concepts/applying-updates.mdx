@@ -44,10 +44,13 @@ The download stays where it is; the app deletes it, for instance once `result()`
 
 - It takes the helper JAR from the app's class path, or from its module path if the module `com.rethinkj.updater.helper` is resolved, for instance with `--add-modules`. `withHelper(jar)` names it instead. A JAR whose manifest does not list the plan formats is not run.
 - It copies the JAR into a new folder `helper-<n>` in the update folder. If the app runs on a runtime in its own folder, as a jpackage or jlink image does, it copies that runtime there as well and starts the helper on the copy. Otherwise the helper runs on the app's runtime.
+- The runtime needs `bin/java`, `bin\java.exe` on Windows. jpackage leaves it out of the runtime it builds, unless `--jlink-options` are given without `--strip-native-commands`, such as `--jlink-options "--strip-debug --no-man-pages --no-header-files"`. Without it, starting the helper throws.
 - It writes the plan and starts the helper in that folder. The helper prints nothing; should its JVM fail to start, what it says ends up in `helper.log` in the update folder.
 - On Linux the helper runs in a session of its own, through `setsid`, so that it outlives the terminal the app was started from.
 
-What updates leave behind, the helper's copies and the old version beside the app's folder, `result()` deletes once no helper is at work. A file that Windows still holds open is deleted at a later call.
+With the result, `result()` deletes what the update left behind: the helper's copy, and what the helper built beside the app's folder since the plan, an unfinished new version and, once the update is applied, the old version. If the app's folder is missing, it leaves the old version where it is. A copy of the helper that Windows still holds open is deleted at a later call.
+
+One process at a time uses an update folder: a second call to start the helper from the same process throws, and two copies of the app must not share one.
 
 ## How the helper replaces an app
 
