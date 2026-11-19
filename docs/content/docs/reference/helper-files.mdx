@@ -5,16 +5,15 @@ description: The files through which core and the helper work together, in forma
 
 core and the helper (`rethinkj-updater-helper`) do not call each other. core starts the helper with one argument, the path of a plan, and the two exchange everything else through files. Some of these files are written by one version of the app and read by the next, so each format stays readable across versions.
 
-So far the helper replaces the app, as [Applying updates](/docs/concepts/applying-updates) describes, but does not start it again.
-
 | File | Folder | Written by | Read by |
 | --- | --- | --- | --- |
 | `plan.properties` | update folder | core of the installed version | the helper of the same version |
 | `confirmed.properties` | update folder | core of the new version, once it runs | the helper that started it |
 | `result.properties` | update folder | the helper | core, when the app starts next |
+| `helper.lock` | update folder | the helper, which locks it until it has written the result | core, which starts no helper while it is locked |
 | `rethinkj-updater.files` | app folder | the build, or the helper after an update | the helper of a later update |
 
-The update folder is one the app names, outside its own folder, such as `%LOCALAPPDATA%\MyApp\updates`. The files in it have fixed names, so that a new version finds them although it did not write the plan. core also keeps its copies of the helper there, in folders `helper-<n>`, which it deletes, and the output of a helper whose JVM fails in `helper.log`; neither is part of the contract, and the app keeps nothing of its own under these names.
+The update folder is one the app names, outside its own folder, such as `%LOCALAPPDATA%\MyApp\updates`. The files in it have fixed names, so that a new version finds them although it did not write the plan. core also keeps its copies of the helper there, in folders `helper-<n>`, which it deletes, and the output of a helper whose JVM fails in `helper.log`; neither is part of the contract, and the app keeps nothing of its own under these names. A lock on `helper.lock` goes with the helper's process, so a helper that is ended releases it as well.
 
 ## Rules
 
@@ -44,14 +43,14 @@ core writes the plan before it starts the helper, for instance on Linux:
 
 ## Confirmation
 
-The new version writes `confirmed.properties`, with `format=1`, once it runs. The helper deletes an earlier one before it starts the new version. If it does not arrive within `confirm.seconds`, or the app exits before, the helper restores the old version and starts that.
+The new version writes `confirmed.properties`, with `format=1`, once it runs. The helper deletes an earlier one before it starts the new version. If it does not arrive within `confirm.seconds`, or the app exits before, the helper restores the old version and starts that. With `mode=restart`, the helper also starts the old version if it changed nothing. It writes the result before it starts the old version, and after the new version has confirmed.
 
 ## Result
 
 | Key | Value |
 | --- | --- |
 | `format` | `1` |
-| `status` | `applied`; `rolled-back` if the old version is back in place; `rejected` if nothing changed. One exception: if the helper cannot rename the old version back, the app's folder is missing, and it writes `rejected` with the reason `failed` and a message that names the folder holding the old version. |
+| `status` | `applied`; `rolled-back` if the old version is back in place; `rejected` if nothing changed. One exception: if the helper cannot rename the old version back, the app's folder is missing or holds the new version that did not confirm, and it writes `rejected` with the reason `failed` and a message that names the folder holding the old version. |
 | `reason` | With `rolled-back` or `rejected`: one of the codes below. |
 | `message` | A sentence in English for a log, not for parsing. |
 
