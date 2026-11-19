@@ -1,14 +1,18 @@
 ---
 title: Release notes and channels
-description: What changed between two versions, and stable versus beta.
+description: What changed between two versions, and which versions a channel offers.
 ---
 
-`Update.find` takes the installed version and the releases of a source. If one is newer, it returns an `Update`: `latest()` is the release to update to, and `releases()` lists every release newer than the installed one, newest first, each with its version, title, date and notes as Markdown. An app that skipped versions so sees everything that changed since, not only the newest notes. Build metadata does not count: `1.0.0+5` is not newer than `1.0.0`.
+`Update.find` takes the installed version and the releases of a source. If one in the app's channel is newer, it returns an `Update`: `latest()` is the release to update to, and `releases()` lists every release of the channel newer than the installed one, newest first, each with its version, title, date and notes as Markdown. An app that skipped versions so sees everything that changed since, not only the newest notes. Build metadata does not count: `1.0.0+5` is not newer than `1.0.0`.
 
-For now pre-releases are left out.
+## Channels
+
+`Update.find(installed, releases)` is the stable channel: it offers releases and leaves pre-releases out. `Update.find(installed, releases, "nightly")` offers the releases and also the pre-releases of the `nightly` channel. A pre-release's channel is the first identifier after the `-` in its version, up to the first `.`: `0.2.0-nightly.202611190300` is in `nightly`, `0.2.0-beta.1` in `beta`. Each channel offers only its own pre-releases. A release marked as a pre-release whose version is not one, such as `1.0.0`, is in no channel. Passing `null` as the channel is the same as the stable channel.
+
+A release ranks above the pre-releases of its version: on the `nightly` channel, `0.2.0` is newer than `0.2.0-nightly.202611190300`, so nightlies built after `0.2.0` need a higher version, such as `0.3.0-nightly.…`, to be offered. An app on the stable channel that runs a pre-release is offered nothing until a release is newer than it; it is never taken back to an older release.
+
+On GitHub each pre-release is a release of its own. `GitHubSource` reads every page of releases, 100 to a request, and without a token GitHub allows 60 requests an hour (see [Sources](/docs/concepts/sources#github)). An app that publishes a pre-release every day should delete old ones.
 
 ## Not implemented yet
 
 Notes that use headings such as Added, Fixed and Breaking are meant to be split into those sections, so that an app can, for example, show breaking changes first. A changelog file in the repository may serve instead of per-release notes.
-
-Each version is meant to belong to a channel: stable or beta. A pre-release version (`1.2.0-beta.1`) is beta. An app on the stable channel sees only stable versions; an app on the beta channel sees both.
