@@ -6,6 +6,7 @@ import java.io.Reader;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -139,14 +140,17 @@ public final class Installation {
       } else if (Files.exists(plan)) {
         return result; // a helper is at work, or was ended before it could report
       }
-      try (DirectoryStream<Path> copies = Files.newDirectoryStream(
-          updates,
-          p -> Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)
-              && p.getFileName().toString().matches("helper-\\d+"))) {
+      // As start() names its copies; not a link, nor a junction, which is a directory as well.
+      try (DirectoryStream<Path> copies = Files.newDirectoryStream(updates, p -> {
+        var attrs = Files.readAttributes(p, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        return attrs.isDirectory()
+            && !attrs.isOther()
+            && p.getFileName().toString().matches("helper-[1-9]\\d*");
+      })) {
         for (Path copy : copies) {
           delete(copy);
         }
-      } catch (IOException e) {
+      } catch (IOException | DirectoryIteratorException e) { // the latter from the filter
         // Tried again at the next call; also when there is no update folder yet.
       }
       return result;
