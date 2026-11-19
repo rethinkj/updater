@@ -28,6 +28,7 @@ import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
@@ -72,6 +73,22 @@ class ReplaceTest {
           Files.readString(app.resolve(Replace.LIST)));
     }
     assertNothingBeside(app); // the old version is deleted once the new one is in place
+  }
+
+  /** The new version makes conf a link to settings, where it brings a user.ini of its own. */
+  @Test
+  @DisabledOnOs(value = OS.WINDOWS, disabledReason = "a link needs rights there")
+  void keepsAFileCarriedOverThroughALinkAlsoInTheNextUpdate() throws Exception {
+    Path app = oldVersion();
+    Helper.main(new String[] {"list", app.toString()});
+    write(app, "conf/user.ini", "mine");
+    Path tar = Path.of("src/test/resources/archive/settings.tar.gz");
+
+    run(plan(app, "archive", tar, sha256(tar)));
+    Properties result = run(plan(app, "archive", tar, sha256(tar)));
+
+    assertEquals("applied", result.getProperty("status"));
+    assertEquals("mine", Files.readString(app.resolve("settings/user.ini")));
   }
 
   @Test

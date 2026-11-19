@@ -155,6 +155,7 @@ final class Replace {
     Path list = app.resolve(LIST);
     Set<String> listed = Files.isRegularFile(list) ? new HashSet<>(Files.readAllLines(list)) : null;
     TreeSet<String> own = files(next);
+    Path root = next.toRealPath();
     try (Stream<Path> paths = Files.walk(app)) {
       for (Path file : (Iterable<Path>) paths::iterator) {
         String name = name(app.relativize(file));
@@ -174,7 +175,10 @@ final class Replace {
             StandardCopyOption.REPLACE_EXISTING,
             StandardCopyOption.COPY_ATTRIBUTES,
             LinkOption.NOFOLLOW_LINKS);
-        own.remove(name); // the user's now, so a later update keeps it as well
+        // The user's now, so a later update keeps it as well; by the path it ended up at, in case
+        // the new version made one of its folders a link.
+        Path copied = target.getParent().toRealPath().resolve(target.getFileName());
+        own.remove(name(root.relativize(copied)));
       }
     }
     writeList(next, own);
