@@ -52,6 +52,8 @@ final class Replace {
    * <p>For an archive, a file of the old folder that its list does not name, such as settings the
    * app keeps there, is carried over into the new one, also in place of a file the new version
    * brings. Without a list, the new version's files replace the old ones and nothing is dropped.
+   * Nothing changes if such a file would be carried over through a link, as when the new version
+   * makes the folder that holds it a link.
    *
    * @param lockedFor how long a rename is tried again while it fails, on Windows because another
    *     process, such as a virus scanner, has a file open
@@ -164,6 +166,15 @@ final class Replace {
           continue;
         }
         Path target = next.resolve(app.relativize(file));
+        // Never through a link, of the new version or of the user's carried over before: it could
+        // lead out of the new version, or two files to one.
+        Path folder = next;
+        for (Path part : app.relativize(file.getParent())) {
+          folder = folder.resolve(part);
+          if (Files.isSymbolicLink(folder)) {
+            throw new IOException(file + " cannot be carried over through the link " + folder);
+          }
+        }
         if (listed == null && Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
           continue; // without a list, the old version's files are not told from the user's
         }

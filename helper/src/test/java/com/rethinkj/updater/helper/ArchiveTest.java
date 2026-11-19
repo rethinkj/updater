@@ -12,6 +12,8 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -77,16 +79,41 @@ class ArchiveTest {
     assertFalse(Files.exists(temp.resolve("evil")));
   }
 
+  /** As jlink links the legal notices of a runtime: app/legal/java.sql/LICENSE to the other. */
   @Test
-  void rejectsALink() {
+  @DisabledOnOs(value = OS.WINDOWS, disabledReason = "a link needs rights there")
+  void keepsALinkInTheFolder() throws IOException {
+    Path app = temp.resolve("app");
+
+    Archive.extract(ARCHIVES.resolve("links.tar.gz"), app);
+
+    Path link = app.resolve("legal/java.sql/LICENSE");
+    assertEquals(Path.of("../java.base/LICENSE"), Files.readSymbolicLink(link));
+    assertEquals("license\n", Files.readString(link));
+  }
+
+  @Test
+  void rejectsALinkOutOfTheFolder() {
     Path app = temp.resolve("app");
 
     // app/passwd links to /etc/passwd.
     IOException e = assertThrows(
         IOException.class, () -> Archive.extract(ARCHIVES.resolve("link.tar.gz"), app));
 
-    assertEquals("app/passwd is a link or a special file, not a file or folder", e.getMessage());
+    assertEquals("app/passwd links out of the folder it is unpacked into", e.getMessage());
     assertFalse(Files.exists(app));
+  }
+
+  /** app/a/b/up links to app, and app/out to a/b/up/../.., which reads as app/a but is above it. */
+  @Test
+  @DisabledOnOs(value = OS.WINDOWS, disabledReason = "a link needs rights there")
+  void rejectsALinkOutOfTheFolderThroughAnother() {
+    Path app = temp.resolve("app");
+
+    IOException e = assertThrows(
+        IOException.class, () -> Archive.extract(ARCHIVES.resolve("chain.tar.gz"), app));
+
+    assertEquals("out links out of the folder it is unpacked into, or to nothing", e.getMessage());
   }
 
   /** A zip in which each entry holds its own name. */

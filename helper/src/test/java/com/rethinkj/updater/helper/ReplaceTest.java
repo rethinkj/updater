@@ -28,6 +28,7 @@ import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
@@ -72,6 +73,25 @@ class ReplaceTest {
           Files.readString(app.resolve(Replace.LIST)));
     }
     assertNothingBeside(app); // the old version is deleted once the new one is in place
+  }
+
+  /** The new version makes conf, where the user keeps a file, a link to settings. */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  @DisabledOnOs(value = OS.WINDOWS, disabledReason = "a link needs rights there")
+  void changesNothingIfAFileWouldBeCarriedOverThroughALink(boolean listed) throws Exception {
+    Path app = oldVersion();
+    if (listed) {
+      Helper.main(new String[] {"list", app.toString()});
+    }
+    write(app, "conf/user.ini", "mine");
+    Path tar = Path.of("src/test/resources/archive/settings.tar.gz");
+
+    Properties result = run(plan(app, "archive", tar, sha256(tar)));
+
+    assertEquals("rejected", result.getProperty("status"));
+    assertOldVersionAlone(app);
+    assertEquals("mine", Files.readString(app.resolve("conf/user.ini")));
   }
 
   @Test
