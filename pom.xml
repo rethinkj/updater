@@ -193,6 +193,8 @@
           <excludeFromFailureFile>${maven.multiModuleProjectDirectory}/config/pmd/baseline.properties</excludeFromFailureFile>
           <minimumTokens>50</minimumTokens>
           <printFailingErrors>true</printFailingErrors>
+          <!-- A file PMD cannot parse fails the build instead of going unchecked. -->
+          <skipPmdError>false</skipPmdError>
           <linkXRef>false</linkXRef>
         </configuration>
         <executions>
