@@ -139,6 +139,8 @@ public final class Helper {
       return false; // such as when the new version no longer has the command's launcher
     }
     // Gathered at every poll: a process that outlives its parent gets another one.
+    // shortcut: a child that is started and orphaned within one poll escapes; contain the tree
+    // (a job object, a process group) if that shows up, which java.base alone cannot.
     Set<ProcessHandle> started = new HashSet<>(Set.of(app.toHandle()));
     long end = System.nanoTime() + plan.confirmWithin().toNanos();
     while (true) {
