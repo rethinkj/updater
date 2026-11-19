@@ -81,14 +81,14 @@ public final class ApplyUpdate {
     // docs:end apply
   }
 
-  /** Deletes the files in {@code folder}, if it exists. */
-  private static void delete(Path folder) throws IOException {
-    if (Files.isDirectory(folder)) {
-      try (DirectoryStream<Path> files = Files.newDirectoryStream(folder)) {
-        for (Path file : files) {
-          Files.delete(file);
-        }
+  /** Deletes the files in {@code folder} as far as it can, without keeping the app from starting. */
+  private static void delete(Path folder) {
+    try (DirectoryStream<Path> files = Files.newDirectoryStream(folder)) {
+      for (Path file : files) {
+        Files.deleteIfExists(file);
       }
+    } catch (IOException e) {
+      // What is left is deleted after the next update; also when there is no such folder yet.
     }
   }
 }

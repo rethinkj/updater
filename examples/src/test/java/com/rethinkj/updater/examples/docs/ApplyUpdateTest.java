@@ -86,9 +86,12 @@ class ApplyUpdateTest {
 
   @AfterEach
   void stop() throws InterruptedException {
-    waitForTheApp();
-    if (server != null) {
-      server.stop(0);
+    try {
+      waitForTheApp();
+    } finally {
+      if (server != null) {
+        server.stop(0);
+      }
     }
   }
 
