@@ -39,7 +39,10 @@ final class Tar {
           byte[] bytes = data.readAllBytes();
           longName = string(bytes, 0, bytes.length);
         }
-        case 'x' -> longName = paxPath(data.readAllBytes()); // NOPMD: a statement, not an operand
+        case 'x' -> {
+          byte[] records = data.readAllBytes();
+          longName = paxPath(records);
+        }
         case 'g' -> { // PAX values for all entries; paxPath rejects a size or sparse map in them
           String path = paxPath(data.readAllBytes());
           if (path != null) {

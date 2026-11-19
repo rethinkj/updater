@@ -89,7 +89,9 @@ final class Archive {
   }
 
   /**
-   * Checks every name and link target in {@code archive} without writing anything.
+   * Checks without writing anything that no name or link target in {@code archive} leads out of
+   * the folder it is unpacked into. A name the file system does not allow fails only in {@link
+   * #resolve}, once earlier entries are written.
    *
    * @return how many folders to strip from each name: 1 for a single top folder, else 0
    */
