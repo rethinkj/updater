@@ -57,7 +57,7 @@ The command comes from the installed version and starts the new one, in the upda
 
 Once no helper is at work, `result()` deletes the helper's copies. One that Windows still holds open, while the helper exits, is deleted at a later call.
 
-While a helper is at work, until it has written its result, starting another one throws an `IllegalStateException`, as does a second start from the same process. So a new version that schedules the next update right after it confirmed does not lose the result of its own.
+While a helper is at work, until it has written its result, starting another one throws an `IllegalStateException`, as does a second start from the same process. Starting a helper deletes a result nobody has read, so a version that schedules the next update soon after it confirmed reads `result()` first, once the helper is done.
 
 ## How the helper replaces an app
 
