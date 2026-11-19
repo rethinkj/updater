@@ -142,10 +142,11 @@ public final class Installation {
       }
       // As start() names its copies; not a link, nor a junction, which is a directory as well.
       try (DirectoryStream<Path> copies = Files.newDirectoryStream(updates, p -> {
+        if (!p.getFileName().toString().matches("helper-[1-9]\\d*")) {
+          return false;
+        }
         var attrs = Files.readAttributes(p, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-        return attrs.isDirectory()
-            && !attrs.isOther()
-            && p.getFileName().toString().matches("helper-[1-9]\\d*");
+        return attrs.isDirectory() && !attrs.isOther();
       })) {
         for (Path copy : copies) {
           delete(copy);
