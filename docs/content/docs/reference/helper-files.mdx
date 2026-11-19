@@ -42,7 +42,7 @@ core writes the plan before it starts the helper, for instance on Linux:
 
 ## Confirmation
 
-The new version writes `confirmed.properties`, with `format=1`, once it runs. The helper deletes an earlier one before it starts the new version. If it does not arrive within `confirm.seconds`, or the app exits before, the helper restores the old version and starts that. With `mode=restart`, the helper writes the result before it starts a version, and it also starts the old version if it changed nothing.
+The new version writes `confirmed.properties`, with `format=1`, once it runs. The helper deletes an earlier one before it starts the new version. If it does not arrive within `confirm.seconds`, or the app exits before, the helper restores the old version and starts that. With `mode=restart`, the helper also starts the old version if it changed nothing. It writes the result before it starts the old version, and after the new version has confirmed.
 
 ## Result
 

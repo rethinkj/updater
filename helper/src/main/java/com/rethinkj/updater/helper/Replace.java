@@ -105,7 +105,7 @@ final class Replace {
     Path failed = app.resolveSibling(app.getFileName() + ".new-" + System.currentTimeMillis());
     try {
       swap(app, backup, failed, lockedFor);
-    } catch (Plan.Rejected | RolledBack e) {
+    } catch (Plan.Rejected | RolledBack | IOException e) { // the latter names the new as the old
       throw new IOException(
           "The old version in " + backup + " cannot take the new one's place: " + e.getMessage(),
           e);

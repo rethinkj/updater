@@ -150,7 +150,8 @@ class ApplyUpdateTest {
   }
 
   private void waitFor(BooleanSupplier condition) throws InterruptedException {
-    for (long end = System.nanoTime() + 60_000_000_000L; !condition.getAsBoolean(); ) {
+    // Two minutes: on Windows a swap and its rollback each retry a locked rename for 30 s.
+    for (long end = System.nanoTime() + 120_000_000_000L; !condition.getAsBoolean(); ) {
       assertTrue(
           System.nanoTime() < end,
           () -> "Timed out; the helper said: " + read(updates.resolve("helper.log")) + "; the app: "
@@ -180,9 +181,18 @@ class ApplyUpdateTest {
 
     static final String BROKEN = "broken";
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
       Path app = Installation.launcher(Path.of("")).orElseThrow().app(); // for the folder only
       if (Files.readString(app.resolve("version.txt")).equals(BROKEN)) {
+        // A process of its own that outlives it: the helper ends it too before it rolls back.
+        Path java = Path.of(System.getProperty("java.home"), "bin", WINDOWS ? "java.exe" : "java");
+        new ProcessBuilder(
+                java.toString(),
+                "-cp",
+                System.getProperty("java.class.path"),
+                Sleeper.class.getName())
+            .start();
+        Thread.sleep(1000);
         System.exit(1);
       }
       Path updates = app.resolveSibling(app.getFileName() + " updates");
@@ -192,6 +202,14 @@ class ApplyUpdateTest {
         System.setOut(log);
         ApplyUpdate.start(updates, download);
       }
+    }
+  }
+
+  /** A process that runs until it is ended. */
+  public static final class Sleeper {
+
+    public static void main(String[] args) throws InterruptedException {
+      Thread.sleep(600_000);
     }
   }
 }

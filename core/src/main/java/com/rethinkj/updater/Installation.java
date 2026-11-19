@@ -221,7 +221,6 @@ public final class Installation {
     }
     Files.createDirectories(updates);
     Files.deleteIfExists(updates.resolve("result.properties"));
-    Files.deleteIfExists(updates.resolve("confirmed.properties"));
     Path copy = Files.createDirectory(updates.resolve("helper-" + System.currentTimeMillis()));
     try {
       if (java.toRealPath().startsWith(app)) {

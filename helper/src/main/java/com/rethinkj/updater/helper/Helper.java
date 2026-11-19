@@ -7,10 +7,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 /**
  * The helper process: {@code java -jar rethinkj-updater-helper.jar <plan>}, where {@code <plan>}
@@ -47,6 +47,7 @@ public final class Helper {
     Path folder = file.toAbsolutePath().getParent();
     Plan plan = null;
     boolean running = false; // whether the version in place runs, started and confirmed
+    boolean unconfirmed = false; // whether the version that did not confirm may be in place
     String status = "applied";
     String reason = null;
     String message;
@@ -58,7 +59,9 @@ public final class Helper {
       if (plan.mode() == Plan.Mode.RESTART) {
         running = startConfirmed(plan, folder);
         if (!running) {
+          unconfirmed = true;
           Replace.rollBack(plan.app(), backup, LOCKED_FOR);
+          unconfirmed = false;
           status = "rolled-back";
           reason = "not-confirmed";
           message = "The new version did not confirm within "
@@ -82,13 +85,15 @@ public final class Helper {
       reason = "failed";
       message = e.toString();
     }
+    boolean reported = false;
     try {
       writeResult(folder, status, reason, message);
+      reported = true;
     } catch (IOException ignored) {
       // Nowhere is left to report it but the exit code.
     }
-    // After the result, which the version it starts reads.
-    if (plan != null && plan.mode() == Plan.Mode.RESTART && !running) {
+    // The version that ran before, once the result is there, which it reads.
+    if (reported && plan != null && plan.mode() == Plan.Mode.RESTART && !running && !unconfirmed) {
       try {
         start(plan, folder);
       } catch (IOException ignored) {
@@ -120,14 +125,17 @@ public final class Helper {
     } catch (IOException e) {
       return false; // such as when the new version no longer has the command's launcher
     }
+    // Gathered while they are its descendants: one that outlives it gets another parent.
+    Set<ProcessHandle> started = new HashSet<>(Set.of(app.toHandle()));
     long end = System.nanoTime() + plan.confirmWithin().toNanos();
     while (true) {
+      app.descendants().forEach(started::add);
       boolean exited = !app.isAlive(); // before the check: it may confirm and then exit
       if (Files.exists(confirmed)) {
         return true;
       }
       if (exited || System.nanoTime() - end >= 0) {
-        stop(app);
+        stop(started);
         return false;
       }
       Thread.sleep(100);
@@ -135,15 +143,15 @@ public final class Helper {
   }
 
   /**
-   * Ends the app and every process it started, and waits for them, so that none of them holds a
-   * file of the new version open: on Windows, a jpackage launcher starts itself again as its child.
+   * Ends the processes the new version started, and waits for them, so that none of them holds a
+   * file of it open: on Windows, a jpackage launcher starts itself again as its child.
    */
-  private static void stop(Process app) {
-    List<ProcessHandle> all =
-        Stream.concat(Stream.of(app.toHandle()), app.descendants()).toList();
-    all.forEach(ProcessHandle::destroyForcibly);
-    for (ProcessHandle p : all) {
-      p.onExit().completeOnTimeout(p, LOCKED_FOR.toSeconds(), TimeUnit.SECONDS).join();
+  private static void stop(Set<ProcessHandle> started) {
+    started.forEach(ProcessHandle::destroyForcibly);
+    long end = System.nanoTime() + LOCKED_FOR.toNanos();
+    for (ProcessHandle p : started) {
+      long left = Math.max(0, end - System.nanoTime());
+      p.onExit().completeOnTimeout(p, left, TimeUnit.NANOSECONDS).join();
     }
   }
 
