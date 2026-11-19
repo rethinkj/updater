@@ -194,8 +194,8 @@ final class Archive {
       switch (type) {
         case '0', '\0', '7' -> visitor.visit(name, false, (int) number(header, 100, 8), null, data);
         case '5' -> visitor.visit(name, true, -1, null, data);
-        // shortcut: a target over 100 bytes is rejected from GNU tar and, cut short, leads to
-        // nothing from PAX; read their long targets once an app has such a link.
+        // shortcut: a target that GNU tar or PAX keeps in a header of its own, such as one over 100
+        // bytes, is rejected; read it there once an app has such a link.
         case '2' -> visitor.visit(name, false, -1, string(header, 157, 100), data);
         case 'L' -> {
           byte[] bytes = data.readAllBytes();
@@ -241,6 +241,10 @@ final class Archive {
           throw new IOException(
               "The tar archive holds a file over 8 GB or a sparse file, which the helper does not"
                   + " read");
+        } else if (record.startsWith("linkpath=")) {
+          throw new IOException(
+              "The tar archive holds a link whose target, such as one over 100 bytes, has a header"
+                  + " of its own, which the helper does not read");
         }
         i += length;
       }
