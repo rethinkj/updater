@@ -44,6 +44,11 @@ class VersionTest {
     assertEquals("1.2.3-rc.1+build.7", v.toString());
     assertTrue(v.isPreRelease());
     assertEquals(0, Version.parse("1.0.0+a").compareTo(Version.parse("1.0.0+b")));
+    assertEquals(List.of("rc", "0a"), Version.parse("1.0.0-rc.0a").preRelease());
+    // A tag of many identifiers, which a regex that recurses for each would overflow the stack on.
+    assertEquals(
+        100_001,
+        Version.parse("1.0.0-" + "a.".repeat(100_000) + "a").preRelease().size());
   }
 
   @Test
@@ -56,8 +61,10 @@ class VersionTest {
     }
     assertThrows(IllegalArgumentException.class, () -> Version.parse("99999999999.0.0"));
     // The constructor holds to the same rules, so a version's text reads back as the same version.
-    assertThrows(IllegalArgumentException.class, () -> new Version(1, 0, 0, List.of("a.b"), ""));
-    assertThrows(IllegalArgumentException.class, () -> new Version(1, 0, 0, List.of("01"), ""));
+    List<String> dotted = List.of("a.b");
+    List<String> leadingZero = List.of("01");
+    assertThrows(IllegalArgumentException.class, () -> new Version(1, 0, 0, dotted, ""));
+    assertThrows(IllegalArgumentException.class, () -> new Version(1, 0, 0, leadingZero, ""));
     assertThrows(IllegalArgumentException.class, () -> new Version(1, 0, 0, List.of(), "a..b"));
   }
 }

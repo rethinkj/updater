@@ -21,16 +21,17 @@ import java.util.regex.Pattern;
 public record Version(int major, int minor, int patch, List<String> preRelease, String build)
     implements Comparable<Version> {
 
-  private static final String IDENTIFIER = "(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)";
-  private static final String BUILD = "[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*";
+  // Alphanumeric first: the repetitions below are possessive, so the first branch that fits wins.
+  private static final String IDENTIFIER = "(?:\\d*[a-zA-Z-][0-9a-zA-Z-]*|0|[1-9]\\d*)";
+  private static final String METADATA = "[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*+";
   private static final Pattern IDENTIFIER_PATTERN = Pattern.compile(IDENTIFIER);
-  private static final Pattern BUILD_PATTERN = Pattern.compile(BUILD);
+  private static final Pattern METADATA_PATTERN = Pattern.compile(METADATA);
 
   // The pattern semver.org recommends, with an optional "v" before it, as in Git tags.
   private static final Pattern SEMVER =
       Pattern.compile("[vV]?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)"
-          + "(?:-(" + IDENTIFIER + "(?:\\." + IDENTIFIER + ")*))?"
-          + "(?:\\+(" + BUILD + "))?");
+          + "(?:-(" + IDENTIFIER + "(?:\\." + IDENTIFIER + ")*+))?"
+          + "(?:\\+(" + METADATA + "))?");
 
   /**
    * @throws IllegalArgumentException if a number is negative, or an identifier or the build
@@ -47,7 +48,7 @@ public record Version(int major, int minor, int patch, List<String> preRelease, 
       }
     }
     Objects.requireNonNull(build, "build");
-    if (!build.isEmpty() && !BUILD_PATTERN.matcher(build).matches()) {
+    if (!build.isEmpty() && !METADATA_PATTERN.matcher(build).matches()) {
       throw new IllegalArgumentException("Not SemVer build metadata: \"" + build + "\"");
     }
   }
@@ -109,7 +110,7 @@ public record Version(int major, int minor, int patch, List<String> preRelease, 
     boolean numB = b.chars().allMatch(Character::isDigit);
     if (numA && numB) {
       // No leading zeros, so the longer number is the larger, whatever its size.
-      return a.length() != b.length() ? Integer.compare(a.length(), b.length()) : a.compareTo(b);
+      return a.length() == b.length() ? a.compareTo(b) : Integer.compare(a.length(), b.length());
     }
     if (numA != numB) {
       return numA ? -1 : 1; // numeric identifiers rank below alphanumeric ones

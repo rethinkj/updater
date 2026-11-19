@@ -65,7 +65,7 @@ class DownloaderTest {
       exchange.getResponseBody().flush();
       try {
         release.await();
-      } catch (InterruptedException e) {
+      } catch (InterruptedException _) {
         Thread.currentThread().interrupt();
       }
       exchange.close();
@@ -87,7 +87,8 @@ class DownloaderTest {
         "app-1.1.0-windows-x64.zip",
         r.asset(Pattern.compile("app-.*-windows-x64\\.zip")).orElseThrow().name());
     assertTrue(r.asset(Pattern.compile("app-.*-mac.*")).isEmpty());
-    assertThrows(IllegalArgumentException.class, () -> r.asset(Pattern.compile("app-.*")));
+    Pattern both = Pattern.compile("app-.*");
+    assertThrows(IllegalArgumentException.class, () -> r.asset(both));
   }
 
   @Test
@@ -132,16 +133,17 @@ class DownloaderTest {
           IOException.class, () -> downloader.download(r, a, folder, n -> {}), a.url() + "");
     }
     // A callback that fails leaves nothing behind either.
+    Release withApp = release(app);
     assertThrows(
         AssertionError.class,
-        () -> downloader.download(release(app), app, folder, n -> {
+        () -> downloader.download(withApp, app, folder, n -> {
           throw new AssertionError("fails");
         }));
     assertEquals(List.of(), files());
   }
 
   @Test
-  void stopsAndCleansUpWhenInterrupted() throws IOException {
+  void stopsAndCleansUpWhenInterrupted() {
     Asset slow = asset("slow.zip", sha256(APP));
     try {
       assertThrows(

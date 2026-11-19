@@ -1,0 +1,1 @@
+- `Version.parse` reads a pre-release of any number of identifiers. A tag with many thousands of them overflowed the stack, so `GitHubSource.releases()` threw a `StackOverflowError`.

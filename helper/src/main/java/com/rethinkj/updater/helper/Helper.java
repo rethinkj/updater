@@ -31,6 +31,9 @@ public final class Helper {
   /** How long the helper tries again to rename a file that another process has open. */
   private static final Duration LOCKED_FOR = Duration.ofSeconds(30);
 
+  private static final String APPLIED = "applied";
+  private static final String REJECTED = "rejected";
+
   private Helper() {}
 
   /**
@@ -54,15 +57,16 @@ public final class Helper {
       lock = FileChannel.open(
           folder.resolve("helper.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
       lock.lock(); // waits for a helper still at work, which an older core may have started
-    } catch (IOException e) {
+    } catch (IOException _) {
       // Then core cannot tell that this helper is at work.
     }
     Plan plan = null;
     boolean running = false; // whether the version in place runs, started and confirmed
     boolean unconfirmed = false; // whether the version that did not confirm may be in place
-    String status = "applied";
+    String status = APPLIED;
     String reason = null;
     String message;
+    boolean interrupted = false;
     try {
       plan = Plan.read(file);
       ProcessHandle.of(plan.pid()).ifPresent(app -> app.onExit().join());
@@ -81,19 +85,24 @@ public final class Helper {
               + plan.app() + " holds the old one again";
         }
       }
-      if (status.equals("applied")) {
+      if (status.equals(APPLIED)) {
         Replace.delete(backup);
       }
     } catch (Plan.Rejected e) {
-      status = "rejected";
+      status = REJECTED;
       reason = e.reason;
       message = e.getMessage();
     } catch (Replace.RolledBack e) {
       status = "rolled-back";
       reason = e.reason;
       message = e.getMessage();
+    } catch (InterruptedException e) {
+      interrupted = true;
+      status = REJECTED;
+      reason = "failed";
+      message = e.toString();
     } catch (Exception e) { // NOPMD: also a RuntimeException from a broken archive
-      status = "rejected";
+      status = REJECTED;
       reason = "failed";
       message = e.toString();
     }
@@ -101,19 +110,28 @@ public final class Helper {
     try {
       writeResult(folder, status, reason, message);
       reported = true;
-    } catch (IOException ignored) {
+    } catch (IOException _) {
       // Nowhere is left to report it but the exit code.
     }
     close(lock);
     // The version that ran before, once the result is there, which it reads.
     if (reported && plan != null && plan.mode() == Plan.Mode.RESTART && !running && !unconfirmed) {
-      try {
-        start(plan, folder);
-      } catch (IOException ignored) {
-        // Such as when the app's folder is missing; the result says why.
-      }
+      startOld(plan, folder);
     }
-    return status.equals("applied") ? 0 : 1;
+    // Only now: on an interrupted thread, writing the result could fail.
+    if (interrupted) {
+      Thread.currentThread().interrupt();
+    }
+    return status.equals(APPLIED) ? 0 : 1;
+  }
+
+  /** Starts the version that ran before, if it can; the result says why not. */
+  private static void startOld(Plan plan, Path folder) {
+    try {
+      start(plan, folder);
+    } catch (IOException _) {
+      // Such as when the app's folder is missing.
+    }
   }
 
   /** Starts the version in place with the plan's command. */
@@ -135,7 +153,7 @@ public final class Helper {
     try {
       Files.deleteIfExists(confirmed);
       app = start(plan, folder);
-    } catch (IOException e) {
+    } catch (IOException _) {
       return false; // such as when the new version no longer has the command's launcher
     }
     // Gathered at every poll: a process that outlives its parent gets another one.
@@ -183,7 +201,7 @@ public final class Helper {
       if (lock != null) {
         lock.close();
       }
-    } catch (IOException ignored) {
+    } catch (IOException _) {
       // The lock goes with the process.
     }
   }

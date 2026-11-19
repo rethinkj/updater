@@ -54,6 +54,9 @@ public final class Installation {
 
   private static boolean started; // guarded by LOCK
 
+  private static final String RESULT = "result.properties";
+  private static final String PLAN = "plan.properties";
+
   private final Path app;
   private final Path updates;
   private final List<String> command;
@@ -119,7 +122,7 @@ public final class Installation {
     try {
       Path real = app.toRealPath();
       return Files.isWritable(real) && Files.isWritable(real.getParent());
-    } catch (IOException e) {
+    } catch (IOException _) {
       return false;
     }
   }
@@ -136,8 +139,8 @@ public final class Installation {
    */
   public Optional<Result> result() throws IOException {
     synchronized (LOCK) {
-      Path file = updates.resolve("result.properties");
-      Path plan = updates.resolve("plan.properties");
+      Path file = updates.resolve(RESULT);
+      Path plan = updates.resolve(PLAN);
       Optional<Result> result = Optional.empty();
       if (Files.exists(file)) {
         result = Optional.of(Result.read(file));
@@ -157,7 +160,7 @@ public final class Installation {
         for (Path copy : copies) {
           delete(copy);
         }
-      } catch (IOException | DirectoryIteratorException e) { // the latter from the filter
+      } catch (IOException | DirectoryIteratorException _) { // the latter from the filter
         // Tried again at the next call; also when there is no update folder yet.
       }
       return result;
@@ -172,8 +175,7 @@ public final class Installation {
    * @throws IOException if the confirmation cannot be written
    */
   public void confirm() throws IOException {
-    if (Files.exists(updates.resolve("plan.properties"))
-        && !Files.exists(updates.resolve("result.properties"))) {
+    if (Files.exists(updates.resolve(PLAN)) && !Files.exists(updates.resolve(RESULT))) {
       Files.writeString(updates.resolve("confirmed.properties"), "format=1\n");
     }
   }
@@ -219,7 +221,7 @@ public final class Installation {
         }
       } catch (OverlappingFileLockException e) {
         throw new IllegalStateException("A helper is still at work in " + updates, e);
-      } catch (NoSuchFileException e) {
+      } catch (NoSuchFileException _) {
         // No helper has run here yet.
       }
       start(download, mode, helper());
@@ -229,17 +231,17 @@ public final class Installation {
 
   private void start(Download download, Plan.Mode mode, Path jar) throws IOException {
     Plan.format(jar); // also rejects a JAR that holds the helper's classes but is the app's own
-    Path app = this.app.toRealPath(); // the helper renames this, not a link to it
+    Path real = app.toRealPath(); // the helper renames this, not a link to it
     Path java = Path.of(System.getProperty("java.home"));
     if (!Files.isRegularFile(java.resolve("bin").resolve(JAVA))) {
       throw new IOException(java + " has no bin/" + JAVA + " to run the helper with; jpackage"
           + " leaves it out unless its --jlink-options omit --strip-native-commands");
     }
     Files.createDirectories(updates);
-    Files.deleteIfExists(updates.resolve("result.properties"));
+    Files.deleteIfExists(updates.resolve(RESULT));
     Path copy = Files.createDirectory(updates.resolve("helper-" + System.currentTimeMillis()));
     try {
-      if (java.toRealPath().startsWith(app)) {
+      if (java.toRealPath().startsWith(real)) {
         // A runtime in the app's folder is replaced with it: on Windows its open files would keep
         // the folder from being renamed, and on Linux the helper would find the new version's.
         copy(java, copy.resolve("runtime"));
@@ -250,11 +252,11 @@ public final class Installation {
         }
       }
       Path helperJar = Files.copy(jar, copy.resolve("rethinkj-updater-helper.jar"));
-      Plan.Kind kind = Files.isDirectory(app) ? Plan.Kind.ARCHIVE : Plan.Kind.JAR;
+      Plan.Kind kind = Files.isDirectory(real) ? Plan.Kind.ARCHIVE : Plan.Kind.JAR;
       Path file = download.file().toAbsolutePath();
       Path plan = new Plan(
               ProcessHandle.current().pid(),
-              app,
+              real,
               kind,
               file,
               download.sha256(),
@@ -276,22 +278,27 @@ public final class Installation {
       // Set by a jpackage launcher on Linux: a launcher the helper starts would take it for its
       // own restart and skip its configuration, so the app would not start.
       builder.environment().remove("_JPACKAGE_LAUNCHER");
-      try {
-        builder
-            .directory(copy.toFile()) // not the app's folder, which it renames
-            .redirectErrorStream(true)
-            .redirectOutput(updates.resolve("helper.log").toFile()) // only if its JVM fails
-            .start();
-      } catch (IOException e) {
-        Files.deleteIfExists(plan); // no helper is at work
-        throw e;
-      }
+      builder
+          .directory(copy.toFile()) // not the app's folder, which it renames
+          .redirectErrorStream(true)
+          .redirectOutput(updates.resolve("helper.log").toFile()); // only if its JVM fails
+      launch(builder, plan);
     } catch (IOException e) {
       try {
         delete(copy); // so that a failed attempt leaves no copy until the next result()
       } catch (IOException again) {
         e.addSuppressed(again);
       }
+      throw e;
+    }
+  }
+
+  /** Starts the helper, or deletes its plan if it cannot: then no helper is at work. */
+  private static void launch(ProcessBuilder builder, Path plan) throws IOException {
+    try {
+      builder.start();
+    } catch (IOException e) {
+      Files.deleteIfExists(plan);
       throw e;
     }
   }

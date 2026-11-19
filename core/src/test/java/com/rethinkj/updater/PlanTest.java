@@ -46,7 +46,8 @@ class PlanTest {
   @Test
   void writesOnlyAFormatTheHelperReads() throws IOException {
     assertEquals(1, Plan.format(helper("1 2")));
-    assertThrows(IOException.class, () -> Plan.format(helper("2")));
+    Path newer = helper("2");
+    assertThrows(IOException.class, () -> Plan.format(newer));
   }
 
   private Path helper(String formats) throws IOException {
@@ -54,7 +55,7 @@ class PlanTest {
     manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
     manifest.getMainAttributes().put(new Attributes.Name(Plan.FORMATS), formats);
     Path jar = Files.createTempFile(folder, "helper-", ".jar");
-    try (OutputStream out = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
+    try (OutputStream _ = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
       // only the manifest
     }
     return jar;

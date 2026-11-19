@@ -137,16 +137,15 @@ class GitHubSourceTest {
 
   @Test
   void readsOnlyOverHttpsOrFromThisMachine() {
-    for (String api :
+    for (String address :
         List.of("http://ghe.example.com/api/v3", "http://127.example.com/", "ftp://localhost/")) {
+      URI uri = URI.create(address);
       assertThrows(
-          IllegalArgumentException.class,
-          () -> new GitHubSource(URI.create(api), "a/b", null),
-          api);
+          IllegalArgumentException.class, () -> new GitHubSource(uri, "a/b", null), address);
     }
-    for (String api :
+    for (String address :
         List.of("http://LOCALHOST:8080/", "http://127.0.0.2/", "http://[0:0:0:0:0:0:0:1]/")) {
-      new GitHubSource(URI.create(api), "a/b", "test-token");
+      new GitHubSource(URI.create(address), "a/b", "test-token");
     }
   }
 

@@ -54,7 +54,7 @@ class InstallationTest {
     Download download = new Download(temp.resolve("download.zip"), "0".repeat(64));
 
     try (FileChannel lock = FileChannel.open(updates.resolve("helper.lock"), CREATE, WRITE);
-        FileLock held = lock.lock()) {
+        FileLock _ = lock.lock()) {
       assertThrows(IllegalStateException.class, () -> installation.replaceOnExit(download));
     }
     assertFalse(Files.exists(updates.resolve("plan.properties")));
