@@ -208,46 +208,56 @@ public final class Installation {
     Files.deleteIfExists(updates.resolve("result.properties"));
     Files.deleteIfExists(updates.resolve("confirmed.properties"));
     Path copy = Files.createDirectory(updates.resolve("helper-" + System.currentTimeMillis()));
-    if (java.toRealPath().startsWith(app)) {
-      // A runtime in the app's folder is replaced with it: on Windows its open files would keep
-      // the folder from being renamed, and on Linux the helper would find the new version's.
-      copy(java, copy.resolve("runtime"));
-      java = copy.resolve("runtime");
-      if (!Files.isExecutable(java.resolve("bin").resolve(JAVA))) {
-        throw new IOException(java + " cannot run the helper; is " + updates + " mounted noexec?");
-      }
-    }
-    Path helperJar = Files.copy(jar, copy.resolve("rethinkj-updater-helper.jar"));
-    Plan.Kind kind = Files.isDirectory(app) ? Plan.Kind.ARCHIVE : Plan.Kind.JAR;
-    Path file = download.file().toAbsolutePath();
-    Path plan = new Plan(
-            ProcessHandle.current().pid(),
-            app,
-            kind,
-            file,
-            download.sha256(),
-            mode,
-            command,
-            CONFIRM_WITHIN)
-        .write(updates);
-    List<String> helperCommand = new ArrayList<>();
-    if (!WINDOWS) {
-      // A session of its own: it outlives the terminal the app runs in, and Ctrl+C there.
-      helperCommand.add("setsid");
-    }
-    helperCommand.addAll(List.of(
-        java.resolve("bin").resolve(JAVA).toString(),
-        "-jar",
-        helperJar.toString(),
-        plan.toString()));
     try {
-      new ProcessBuilder(helperCommand)
-          .directory(copy.toFile()) // not the app's folder, which it renames
-          .redirectErrorStream(true)
-          .redirectOutput(updates.resolve("helper.log").toFile()) // only if its JVM fails
-          .start();
+      if (java.toRealPath().startsWith(app)) {
+        // A runtime in the app's folder is replaced with it: on Windows its open files would keep
+        // the folder from being renamed, and on Linux the helper would find the new version's.
+        copy(java, copy.resolve("runtime"));
+        java = copy.resolve("runtime");
+        if (!Files.isExecutable(java.resolve("bin").resolve(JAVA))) {
+          throw new IOException(
+              java + " cannot run the helper; is " + updates + " mounted noexec?");
+        }
+      }
+      Path helperJar = Files.copy(jar, copy.resolve("rethinkj-updater-helper.jar"));
+      Plan.Kind kind = Files.isDirectory(app) ? Plan.Kind.ARCHIVE : Plan.Kind.JAR;
+      Path file = download.file().toAbsolutePath();
+      Path plan = new Plan(
+              ProcessHandle.current().pid(),
+              app,
+              kind,
+              file,
+              download.sha256(),
+              mode,
+              command,
+              CONFIRM_WITHIN)
+          .write(updates);
+      List<String> helperCommand = new ArrayList<>();
+      if (!WINDOWS) {
+        // A session of its own: it outlives the terminal the app runs in, and Ctrl+C there.
+        helperCommand.add("setsid");
+      }
+      helperCommand.addAll(List.of(
+          java.resolve("bin").resolve(JAVA).toString(),
+          "-jar",
+          helperJar.toString(),
+          plan.toString()));
+      try {
+        new ProcessBuilder(helperCommand)
+            .directory(copy.toFile()) // not the app's folder, which it renames
+            .redirectErrorStream(true)
+            .redirectOutput(updates.resolve("helper.log").toFile()) // only if its JVM fails
+            .start();
+      } catch (IOException e) {
+        Files.deleteIfExists(plan); // no helper is at work
+        throw e;
+      }
     } catch (IOException e) {
-      Files.deleteIfExists(plan); // no helper is at work
+      try {
+        delete(copy); // so that a failed attempt leaves no copy until the next result()
+      } catch (IOException again) {
+        e.addSuppressed(again);
+      }
       throw e;
     }
   }
