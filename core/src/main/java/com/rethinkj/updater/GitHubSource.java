@@ -40,7 +40,8 @@ import tools.jackson.databind.json.JsonMapper;
 public final class GitHubSource implements Source {
 
   private static final URI GITHUB_API = URI.create("https://api.github.com/");
-  private static final Pattern REPOSITORY = Pattern.compile("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+");
+  private static final String HTTPS = "https";
+  private static final Pattern OWNER_NAME = Pattern.compile("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+");
   private static final Pattern NEXT_LINK = Pattern.compile("<([^>]+)>\\s*;\\s*rel=\"next\"");
   private static final Duration TIMEOUT = Duration.ofSeconds(30);
   private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -69,7 +70,7 @@ public final class GitHubSource implements Source {
    *     neither https nor on this machine
    */
   public GitHubSource(URI api, String repository, String token) {
-    if (!REPOSITORY.matcher(repository).matches()) {
+    if (!OWNER_NAME.matcher(repository).matches()) {
       throw new IllegalArgumentException("Not a repository as owner/name: \"" + repository + "\"");
     }
     String base = api.toString();
@@ -77,7 +78,7 @@ public final class GitHubSource implements Source {
     this.repository = repository;
     this.token = token == null || token.isBlank() ? null : token.strip();
     // Over plain http anyone on the way could swap a release's addresses and checksums.
-    if (!"https".equalsIgnoreCase(this.api.getScheme())
+    if (!HTTPS.equalsIgnoreCase(this.api.getScheme())
         && !("http".equalsIgnoreCase(this.api.getScheme()) && loopback(this.api))) {
       throw new IllegalArgumentException(
           "Releases are read only over https or from this machine, not from " + this.api);
@@ -149,11 +150,11 @@ public final class GitHubSource implements Source {
         http.sendAsync(request.build(), HttpResponse.BodyHandlers.ofByteArray());
     try {
       return answer.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-    } catch (InterruptedException e) {
+    } catch (InterruptedException _) {
       answer.cancel(true);
       Thread.currentThread().interrupt();
       throw new InterruptedIOException("Interrupted while asking GitHub for " + uri);
-    } catch (TimeoutException e) {
+    } catch (TimeoutException _) {
       answer.cancel(true);
       throw new HttpTimeoutException(
           "GitHub did not answer " + uri + " within " + TIMEOUT.toSeconds() + " seconds");
@@ -186,7 +187,7 @@ public final class GitHubSource implements Source {
                 .flatMap(GitHubSource::number)
                 .map(Instant::ofEpochSecond))
             .orElse(null);
-      } catch (ArithmeticException | DateTimeException e) {
+      } catch (ArithmeticException | DateTimeException _) {
         retryAt = null; // a time no clock reaches says nothing
       }
       return new RateLimitException(
@@ -237,16 +238,17 @@ public final class GitHubSource implements Source {
     }
     try {
       // Parses an address without asking DNS, and refuses a name such as 127.example.com.
-      return InetAddress.ofLiteral(host.replaceAll("^\\[|]$", "")).isLoopbackAddress();
-    } catch (IllegalArgumentException e) {
+      return InetAddress.ofLiteral(host.replaceFirst("^\\[(.*)]$", "$1")).isLoopbackAddress();
+    } catch (IllegalArgumentException _) {
       return false;
     }
   }
 
   private static int port(URI uri) {
-    return uri.getPort() != -1
-        ? uri.getPort()
-        : "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+    if (uri.getPort() != -1) {
+      return uri.getPort();
+    }
+    return HTTPS.equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
   }
 
   private static Optional<Release> release(JsonNode node) throws IOException {
@@ -257,7 +259,7 @@ public final class GitHubSource implements Source {
     Version version;
     try {
       version = Version.parse(tag);
-    } catch (IllegalArgumentException e) {
+    } catch (IllegalArgumentException _) {
       return Optional.empty(); // such as "nightly": not a version to update to
     }
     List<Asset> assets = new ArrayList<>();
@@ -289,7 +291,7 @@ public final class GitHubSource implements Source {
     try {
       long n = Long.parseLong(header.strip());
       return n < 0 ? Optional.empty() : Optional.of(n);
-    } catch (NumberFormatException e) {
+    } catch (NumberFormatException _) {
       return Optional.empty(); // Retry-After may also be a date, which GitHub does not send
     }
   }
@@ -306,10 +308,10 @@ public final class GitHubSource implements Source {
     try {
       URI uri = new URI(text);
       String scheme = String.valueOf(uri.getScheme()).toLowerCase(Locale.ROOT);
-      if ((scheme.equals("https") || scheme.equals("http")) && uri.getHost() != null) {
+      if ((scheme.equals(HTTPS) || scheme.equals("http")) && uri.getHost() != null) {
         return uri;
       }
-    } catch (URISyntaxException e) {
+    } catch (URISyntaxException _) {
       // reported below
     }
     throw new IOException("GitHub sent no valid " + field + ": \"" + text + "\"");

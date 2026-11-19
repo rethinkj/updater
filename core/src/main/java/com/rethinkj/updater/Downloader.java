@@ -64,6 +64,8 @@ public final class Downloader {
    * @throws IOException if no checksum is known for the file, it does not match, or the download
    *     fails. No file is left behind.
    */
+  @SuppressWarnings(
+      "java:S1181") // rethrown: any failure, an Error from progress too, deletes the file
   public Download download(Release release, Asset asset, Path folder, LongConsumer progress)
       throws IOException {
     String expected = checksum(release, asset);
@@ -132,7 +134,7 @@ public final class Downloader {
     HttpResponse<Flow.Publisher<List<ByteBuffer>>> response;
     try {
       response = (secure ? https : local).send(request, HttpResponse.BodyHandlers.ofPublisher());
-    } catch (InterruptedException e) {
+    } catch (InterruptedException _) {
       Thread.currentThread().interrupt();
       throw new InterruptedIOException("Interrupted while downloading " + uri);
     }
@@ -213,11 +215,12 @@ public final class Downloader {
     }
 
     /** The next part, or {@code null} at the end of the body. */
+    @SuppressWarnings("java:S1168") // the end, which an empty part is not
     List<ByteBuffer> next(URI uri) throws IOException {
       Object part;
       try {
         part = queue.poll(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-      } catch (InterruptedException e) {
+      } catch (InterruptedException _) {
         Thread.currentThread().interrupt();
         throw new InterruptedIOException("Interrupted while downloading " + uri);
       }

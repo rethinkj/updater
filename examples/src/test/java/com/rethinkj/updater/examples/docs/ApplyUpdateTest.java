@@ -149,6 +149,7 @@ class ApplyUpdateTest {
     }
   }
 
+  @SuppressWarnings("java:S2925") // polls files that other processes write, not a test's own thread
   private void waitFor(BooleanSupplier condition) throws InterruptedException {
     // Two minutes: on Windows a swap and its rollback each retry a locked rename for 30 s.
     for (long end = System.nanoTime() + 120_000_000_000L; !condition.getAsBoolean(); ) {
@@ -167,7 +168,7 @@ class ApplyUpdateTest {
   private static String read(Path file) {
     try {
       return Files.readString(file);
-    } catch (IOException e) {
+    } catch (IOException _) {
       return "nothing";
     }
   }
@@ -181,6 +182,7 @@ class ApplyUpdateTest {
 
     static final String BROKEN = "broken";
 
+    @SuppressWarnings("java:S2925") // the app, a process of its own: gives its child time to start
     public static void main(String[] args) throws Exception {
       Path app = Installation.launcher(Path.of("")).orElseThrow().app(); // for the folder only
       if (Files.readString(app.resolve("version.txt")).equals(BROKEN)) {
@@ -208,7 +210,8 @@ class ApplyUpdateTest {
   /** A process that runs until it is ended. */
   public static final class Sleeper {
 
-    public static void main(String[] args) throws InterruptedException {
+    @SuppressWarnings("java:S2925") // a process of its own, ended by the helper or after 10 minutes
+    public static void main() throws InterruptedException {
       Thread.sleep(600_000);
     }
   }

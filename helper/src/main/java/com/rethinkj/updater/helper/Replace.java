@@ -165,35 +165,46 @@ final class Replace {
     try (Stream<Path> paths = Files.walk(app)) {
       for (Path file : (Iterable<Path>) paths::iterator) {
         String name = name(app.relativize(file));
-        if (Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS)
-            || name.equals(LIST)
-            || (listed != null && listed.contains(name))) {
-          continue;
+        boolean userFile = !Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS)
+            && !name.equals(LIST)
+            && (listed == null || !listed.contains(name));
+        if (userFile && carry(app, next, file, listed == null)) {
+          own.remove(name); // the user's now, so a later update keeps it as well
         }
-        Path target = next.resolve(app.relativize(file));
-        // Never through a link, of the new version or of the user's carried over before: it could
-        // lead out of the new version, or two files to one.
-        Path folder = next;
-        for (Path part : app.relativize(file.getParent())) {
-          folder = folder.resolve(part);
-          if (Files.isSymbolicLink(folder)) {
-            throw new IOException(file + " cannot be carried over through the link " + folder);
-          }
-        }
-        if (listed == null && Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-          continue; // without a list, the old version's files are not told from the user's
-        }
-        Files.createDirectories(target.getParent());
-        Files.copy(
-            file,
-            target,
-            StandardCopyOption.REPLACE_EXISTING,
-            StandardCopyOption.COPY_ATTRIBUTES,
-            LinkOption.NOFOLLOW_LINKS);
-        own.remove(name); // the user's now, so a later update keeps it as well
       }
     }
     writeList(next, own);
+  }
+
+  /**
+   * Copies {@code file} of {@code app} to the same place in {@code next}.
+   *
+   * @param unlisted whether {@code app} has no list, so that a file already in {@code next} is kept
+   * @return whether it copied the file
+   */
+  private static boolean carry(Path app, Path next, Path file, boolean unlisted)
+      throws IOException {
+    Path target = next.resolve(app.relativize(file));
+    // Never through a link, of the new version or of the user's carried over before: it could
+    // lead out of the new version, or two files to one.
+    Path folder = next;
+    for (Path part : app.relativize(file.getParent())) {
+      folder = folder.resolve(part);
+      if (Files.isSymbolicLink(folder)) {
+        throw new IOException(file + " cannot be carried over through the link " + folder);
+      }
+    }
+    if (unlisted && Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+      return false; // without a list, the old version's files are not told from the user's
+    }
+    Files.createDirectories(target.getParent());
+    Files.copy(
+        file,
+        target,
+        StandardCopyOption.REPLACE_EXISTING,
+        StandardCopyOption.COPY_ATTRIBUTES,
+        LinkOption.NOFOLLOW_LINKS);
+    return true;
   }
 
   /** The paths of the files in {@code folder}, without the list. */
@@ -229,7 +240,7 @@ final class Replace {
         }
         try {
           Thread.sleep(100);
-        } catch (InterruptedException interrupted) {
+        } catch (InterruptedException _) {
           Thread.currentThread().interrupt();
           throw e;
         }
@@ -273,7 +284,7 @@ final class Replace {
           return FileVisitResult.CONTINUE;
         }
       });
-    } catch (IOException e) {
+    } catch (IOException _) {
       // Also when there is no such folder, after a swap.
     }
   }

@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
  */
 public final class CheckForUpdate {
 
-  public static void main(String[] args) throws IOException {
+  public static void main() throws IOException {
     // docs:start source
     Source source = new GitHubSource("cli/cli");
     // docs:end source
