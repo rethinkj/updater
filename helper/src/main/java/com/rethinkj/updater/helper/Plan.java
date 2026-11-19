@@ -2,6 +2,7 @@ package com.rethinkj.updater.helper;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.io.Serial;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,6 +48,9 @@ record Plan(
 
   /** Why the helper does not carry out a plan: the reason code of the result, and a message. */
   static final class Rejected extends Exception {
+    @Serial
+    private static final long serialVersionUID = 1L;
+
     final String reason;
 
     Rejected(String reason, String message) {

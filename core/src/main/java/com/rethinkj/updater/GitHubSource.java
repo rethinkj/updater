@@ -118,7 +118,8 @@ public final class GitHubSource implements Source {
     return releases;
   }
 
-  private HttpResponse<byte[]> get(URI uri) throws IOException {
+  private HttpResponse<byte[]> get(URI start) throws IOException {
+    URI uri = start;
     for (int redirects = 0; ; redirects++) {
       HttpResponse<byte[]> response = send(uri);
       int status = response.statusCode();
@@ -266,7 +267,7 @@ public final class GitHubSource implements Source {
           text(a, "name"),
           uri(a, "browser_download_url"),
           a.path("size").asLong(0),
-          digest.startsWith("sha256:") ? digest.substring(7).toLowerCase() : ""));
+          digest.startsWith("sha256:") ? digest.substring(7).toLowerCase(Locale.ROOT) : ""));
     }
     String title = text(node, "name").strip();
     try {
