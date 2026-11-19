@@ -2,12 +2,15 @@ package com.rethinkj.updater.helper;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -45,6 +48,15 @@ public final class Helper {
 
   static int run(Path file) {
     Path folder = file.toAbsolutePath().getParent();
+    // Held until the result is written, or the helper is ended: core starts no helper meanwhile.
+    FileChannel lock = null;
+    try {
+      lock = FileChannel.open(
+          folder.resolve("helper.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+      lock.lock(); // waits for a helper still at work, which an older core may have started
+    } catch (IOException e) {
+      // Then core cannot tell that this helper is at work.
+    }
     Plan plan = null;
     boolean running = false; // whether the version in place runs, started and confirmed
     boolean unconfirmed = false; // whether the version that did not confirm may be in place
@@ -92,6 +104,7 @@ public final class Helper {
     } catch (IOException ignored) {
       // Nowhere is left to report it but the exit code.
     }
+    close(lock);
     // The version that ran before, once the result is there, which it reads.
     if (reported && plan != null && plan.mode() == Plan.Mode.RESTART && !running && !unconfirmed) {
       try {
@@ -125,11 +138,11 @@ public final class Helper {
     } catch (IOException e) {
       return false; // such as when the new version no longer has the command's launcher
     }
-    // Gathered while they are its descendants: one that outlives it gets another parent.
+    // Gathered at every poll: a process that outlives its parent gets another one.
     Set<ProcessHandle> started = new HashSet<>(Set.of(app.toHandle()));
     long end = System.nanoTime() + plan.confirmWithin().toNanos();
     while (true) {
-      app.descendants().forEach(started::add);
+      gather(started);
       boolean exited = !app.isAlive(); // before the check: it may confirm and then exit
       if (Files.exists(confirmed)) {
         return true;
@@ -147,11 +160,29 @@ public final class Helper {
    * file of it open: on Windows, a jpackage launcher starts itself again as its child.
    */
   private static void stop(Set<ProcessHandle> started) {
+    gather(started);
     started.forEach(ProcessHandle::destroyForcibly);
     long end = System.nanoTime() + LOCKED_FOR.toNanos();
     for (ProcessHandle p : started) {
       long left = Math.max(0, end - System.nanoTime());
       p.onExit().completeOnTimeout(p, left, TimeUnit.NANOSECONDS).join();
+    }
+  }
+
+  /** Adds the descendants of the processes in {@code started}, also of those with a new parent. */
+  private static void gather(Set<ProcessHandle> started) {
+    for (ProcessHandle p : List.copyOf(started)) {
+      p.descendants().forEach(started::add);
+    }
+  }
+
+  private static void close(FileChannel lock) {
+    try {
+      if (lock != null) {
+        lock.close();
+      }
+    } catch (IOException ignored) {
+      // The lock goes with the process.
     }
   }
 

@@ -52,7 +52,7 @@ class HelperTest {
     assertEquals("rejected", result.getProperty("status"));
     assertEquals("format", result.getProperty("reason"));
     try (var files = Files.list(folder)) {
-      assertEquals(2, files.count()); // the plan and the result, no temporary file
+      assertEquals(3, files.count()); // the plan, the result and the lock, no temporary file
     }
   }
 }

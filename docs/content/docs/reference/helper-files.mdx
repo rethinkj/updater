@@ -10,9 +10,10 @@ core and the helper (`rethinkj-updater-helper`) do not call each other. core sta
 | `plan.properties` | update folder | core of the installed version | the helper of the same version |
 | `confirmed.properties` | update folder | core of the new version, once it runs | the helper that started it |
 | `result.properties` | update folder | the helper | core, when the app starts next |
+| `helper.lock` | update folder | the helper, which locks it until it has written the result | core, which starts no helper while it is locked |
 | `rethinkj-updater.files` | app folder | the build, or the helper after an update | the helper of a later update |
 
-The update folder is one the app names, outside its own folder, such as `%LOCALAPPDATA%\MyApp\updates`. The files in it have fixed names, so that a new version finds them although it did not write the plan. core also keeps its copies of the helper there, in folders `helper-<n>`, which it deletes, and the output of a helper whose JVM fails in `helper.log`; neither is part of the contract, and the app keeps nothing of its own under these names.
+The update folder is one the app names, outside its own folder, such as `%LOCALAPPDATA%\MyApp\updates`. The files in it have fixed names, so that a new version finds them although it did not write the plan. core also keeps its copies of the helper there, in folders `helper-<n>`, which it deletes, and the output of a helper whose JVM fails in `helper.log`; neither is part of the contract, and the app keeps nothing of its own under these names. A lock on `helper.lock` goes with the helper's process, so a helper that is ended releases it as well.
 
 ## Rules
 

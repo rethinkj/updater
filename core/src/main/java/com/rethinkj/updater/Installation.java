@@ -1,16 +1,21 @@
 package com.rethinkj.updater;
 
+import static java.nio.file.StandardOpenOption.WRITE;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.net.URI;
 import java.net.URL;
+import java.nio.channels.FileChannel;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
@@ -179,8 +184,8 @@ public final class Installation {
    * the new version does not {@link #confirm()} within two minutes, or exits before, the helper
    * puts the old version back and starts that.
    *
-   * @throws IllegalStateException if this installation has no command, or this process has
-   *     started a helper already
+   * @throws IllegalStateException if this installation has no command, this process has started
+   *     a helper already, or a helper is still at work in the update folder
    * @throws IOException if the helper cannot be found or started
    */
   public void restart(Download download) throws IOException {
@@ -194,7 +199,8 @@ public final class Installation {
    * Starts the helper, which replaces the app with {@code download} whenever this process exits,
    * and does not start it again.
    *
-   * @throws IllegalStateException if this process has started a helper already
+   * @throws IllegalStateException if this process has started a helper already, or a helper is
+   *     still at work in the update folder
    * @throws IOException if the helper cannot be found or started
    */
   public void replaceOnExit(Download download) throws IOException {
@@ -205,6 +211,16 @@ public final class Installation {
     synchronized (LOCK) {
       if (started) {
         throw new IllegalStateException("A helper already waits for this process to exit");
+      }
+      // A helper locks it until it has reported, so that its report is not lost to the next one.
+      try (FileChannel lock = FileChannel.open(updates.resolve("helper.lock"), WRITE)) {
+        if (lock.tryLock() == null) {
+          throw new IllegalStateException("A helper is still at work in " + updates);
+        }
+      } catch (OverlappingFileLockException e) {
+        throw new IllegalStateException("A helper is still at work in " + updates, e);
+      } catch (NoSuchFileException e) {
+        // No helper has run here yet.
       }
       start(download, mode, helper());
       started = true;
