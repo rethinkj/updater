@@ -76,11 +76,14 @@ class ReplaceTest {
   }
 
   /** The new version makes conf, where the user keeps a file, a link to settings. */
-  @Test
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
   @DisabledOnOs(value = OS.WINDOWS, disabledReason = "a link needs rights there")
-  void changesNothingIfAFileWouldBeCarriedOverThroughALink() throws Exception {
+  void changesNothingIfAFileWouldBeCarriedOverThroughALink(boolean listed) throws Exception {
     Path app = oldVersion();
-    Helper.main(new String[] {"list", app.toString()});
+    if (listed) {
+      Helper.main(new String[] {"list", app.toString()});
+    }
     write(app, "conf/user.ini", "mine");
     Path tar = Path.of("src/test/resources/archive/settings.tar.gz");
 

@@ -166,9 +166,6 @@ final class Replace {
           continue;
         }
         Path target = next.resolve(app.relativize(file));
-        if (listed == null && Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-          continue; // without a list, the old version's files are not told from the user's
-        }
         // Never through a link, of the new version or of the user's carried over before: it could
         // lead out of the new version, or two files to one.
         Path folder = next;
@@ -177,6 +174,9 @@ final class Replace {
           if (Files.isSymbolicLink(folder)) {
             throw new IOException(file + " cannot be carried over through the link " + folder);
           }
+        }
+        if (listed == null && Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+          continue; // without a list, the old version's files are not told from the user's
         }
         Files.createDirectories(target.getParent());
         Files.copy(
