@@ -52,6 +52,8 @@ final class Replace {
    * <p>For an archive, a file of the old folder that its list does not name, such as settings the
    * app keeps there, is carried over into the new one, also in place of a file the new version
    * brings. Without a list, the new version's files replace the old ones and nothing is dropped.
+   * Nothing changes if such a file would be carried over through a link, as when the new version
+   * makes the folder that holds it a link.
    *
    * @param lockedFor how long a rename is tried again while it fails, on Windows because another
    *     process, such as a virus scanner, has a file open
@@ -155,7 +157,6 @@ final class Replace {
     Path list = app.resolve(LIST);
     Set<String> listed = Files.isRegularFile(list) ? new HashSet<>(Files.readAllLines(list)) : null;
     TreeSet<String> own = files(next);
-    Path root = next.toRealPath();
     try (Stream<Path> paths = Files.walk(app)) {
       for (Path file : (Iterable<Path>) paths::iterator) {
         String name = name(app.relativize(file));
@@ -168,13 +169,14 @@ final class Replace {
         if (listed == null && Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
           continue; // without a list, the old version's files are not told from the user's
         }
-        // A link of the user's, carried over before, may sit where a link of the new version leads.
-        Path parent = target.getParent();
-        while (Files.notExists(parent, LinkOption.NOFOLLOW_LINKS)) {
-          parent = parent.getParent();
-        }
-        if (!parent.toRealPath().startsWith(root)) {
-          throw new IOException(file + " would be carried over out of " + next);
+        // Never through a link, of the new version or of the user's carried over before: it could
+        // lead out of the new version, or two files to one.
+        Path folder = next;
+        for (Path part : app.relativize(file.getParent())) {
+          folder = folder.resolve(part);
+          if (Files.isSymbolicLink(folder)) {
+            throw new IOException(file + " cannot be carried over through the link " + folder);
+          }
         }
         Files.createDirectories(target.getParent());
         Files.copy(
@@ -183,10 +185,7 @@ final class Replace {
             StandardCopyOption.REPLACE_EXISTING,
             StandardCopyOption.COPY_ATTRIBUTES,
             LinkOption.NOFOLLOW_LINKS);
-        // The user's now, so a later update keeps it as well; by the path it ended up at, in case
-        // the new version made one of its folders a link.
-        Path copied = target.getParent().toRealPath().resolve(target.getFileName());
-        own.remove(name(root.relativize(copied)));
+        own.remove(name); // the user's now, so a later update keeps it as well
       }
     }
     writeList(next, own);

@@ -80,7 +80,7 @@ java -jar rethinkj-updater-helper.jar list <folder>
 ```
 
 - A file the list names is replaced by the new version, or dropped if the new version does not have it.
-- Any other file, such as settings the app keeps in its folder, is carried over into the new version, also in place of a file of the same path that the new version brings. The new list does not name it either.
+- Any other file, such as settings the app keeps in its folder, is carried over into the new version, also in place of a file of the same path that the new version brings. The new list does not name it either. If the new version makes the folder that holds such a file a link, the helper rejects the update and changes nothing.
 - Without a list, the new version's files replace the old ones, and no file is dropped.
 
 ## Archives

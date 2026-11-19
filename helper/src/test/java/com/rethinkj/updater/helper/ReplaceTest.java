@@ -75,20 +75,20 @@ class ReplaceTest {
     assertNothingBeside(app); // the old version is deleted once the new one is in place
   }
 
-  /** The new version makes conf a link to settings, where it brings a user.ini of its own. */
+  /** The new version makes conf, where the user keeps a file, a link to settings. */
   @Test
   @DisabledOnOs(value = OS.WINDOWS, disabledReason = "a link needs rights there")
-  void keepsAFileCarriedOverThroughALinkAlsoInTheNextUpdate() throws Exception {
+  void changesNothingIfAFileWouldBeCarriedOverThroughALink() throws Exception {
     Path app = oldVersion();
     Helper.main(new String[] {"list", app.toString()});
     write(app, "conf/user.ini", "mine");
     Path tar = Path.of("src/test/resources/archive/settings.tar.gz");
 
-    run(plan(app, "archive", tar, sha256(tar)));
     Properties result = run(plan(app, "archive", tar, sha256(tar)));
 
-    assertEquals("applied", result.getProperty("status"));
-    assertEquals("mine", Files.readString(app.resolve("settings/user.ini")));
+    assertEquals("rejected", result.getProperty("status"));
+    assertOldVersionAlone(app);
+    assertEquals("mine", Files.readString(app.resolve("conf/user.ini")));
   }
 
   @Test
