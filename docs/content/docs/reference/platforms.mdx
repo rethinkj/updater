@@ -13,7 +13,7 @@ macOS is not a target.
 
 ## Tested
 
-The CI builds everything and runs every test on Ubuntu 24.04 and on GitHub's latest Windows Server, with Temurin 25. The tests use no network: sources answer from a local server with recorded responses, and the files an update replaces lie in a temporary folder whose path has a space and a character beyond ASCII.
+The CI builds everything and runs the tests on Ubuntu 24.04 and on GitHub's latest Windows Server, with Temurin 25. The tests use no network: sources answer from a local server with recorded responses, and the files an update replaces lie in a temporary folder whose path has a space and a character beyond ASCII.
 
 | | Linux | Windows |
 | --- | --- | --- |
@@ -22,7 +22,8 @@ The CI builds everything and runs every test on Ubuntu 24.04 and on GitHub's lat
 | A failure halfway through unpacking, or a rename that fails, leaves the old version in place | ✓ | ✓ |
 | A locked file: the helper tries again, and changes nothing if it stays locked | | ✓ |
 | A tar.gz keeps which files are executable | ✓ | |
-| Links in a tar inside the app's folder are kept, links out of it rejected | ✓ | |
+| Links in a tar inside the app's folder are kept | ✓ | |
+| A link in a tar that leads out of the app's folder is rejected | ✓ | ✓ |
 | The user's files are carried over, but never through a link | ✓ | ✓, without links |
 
 Windows creates links only with extra rights, has no executable bit, and alone locks open files, so those tests run on one platform. The tests against the real GitHub run only with `-Dnetwork.tests=true`.
