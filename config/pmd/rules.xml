@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The PMD rules mvn verify checks the main code of every module with. Whole categories, so that
+     a rule a newer PMD brings is checked as well, without the ones below that only argue style
+     or flag what this code does on purpose. -->
+<ruleset name="rethinkj Updater"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+  <description>Bugs, dead code, duplication and design: classes and methods that grow too large.</description>
+
+  <rule ref="category/java/bestpractices.xml">
+    <!-- A loop that reads up to a sentinel advances its variable in the condition or the body. -->
+    <exclude name="AvoidReassigningLoopVariables"/>
+    <!-- Yoda conditions, on values that are never null here. -->
+    <exclude name="LiteralsFirstInComparisons"/>
+    <!-- Flags turning an InterruptedException or a timeout into the IOException for it, which
+         takes no cause, and the helper's results, which carry only a message. -->
+    <exclude name="PreserveStackTrace"/>
+  </rule>
+
+  <rule ref="category/java/codestyle.xml">
+    <!-- Taste, or at odds with how this code is written: final everywhere, one return, long
+         names, var. -->
+    <exclude name="AtLeastOneConstructor"/>
+    <exclude name="CallSuperInConstructor"/>
+    <exclude name="CommentDefaultAccessModifier"/>
+    <exclude name="ConfusingTernary"/>
+    <exclude name="LocalVariableCouldBeFinal"/>
+    <exclude name="LongVariable"/>
+    <exclude name="MethodArgumentCouldBeFinal"/>
+    <exclude name="OnlyOneReturn"/>
+    <exclude name="ShortClassName"/>
+    <exclude name="ShortVariable"/>
+    <exclude name="UseExplicitTypes"/>
+  </rule>
+
+  <rule ref="category/java/design.xml">
+    <!-- Counts every call on a returned object, as in a builder or a stream. -->
+    <exclude name="LawOfDemeter"/>
+    <!-- Needs a list of packages to keep apart; each module is one package. -->
+    <exclude name="LoosePackageCoupling"/>
+    <!-- Flags a catch that cleans up and throws the exception on, which is not flow control. -->
+    <exclude name="ExceptionAsFlowControl"/>
+  </rule>
+
+  <!-- The Javadoc itself is checked by the javadoc plugin's doclint. -->
+  <rule ref="category/java/documentation.xml/UncommentedEmptyConstructor"/>
+  <rule ref="category/java/documentation.xml/UncommentedEmptyMethodBody"/>
+
+  <rule ref="category/java/errorprone.xml">
+    <!-- Status codes and tar block sizes read better as numbers than as constants. -->
+    <exclude name="AvoidLiteralsInIfCondition"/>
+    <!-- File modes are octal by convention. -->
+    <exclude name="AvoidUsingOctalValues"/>
+    <!-- Fields named like the accessor that returns them, as in a record. -->
+    <exclude name="AvoidFieldNameMatchingMethodName"/>
+    <!-- null means "not given" in a few fields; Optional is what the API hands out. -->
+    <exclude name="NullAssignment"/>
+    <!-- Advice for application servers. -->
+    <exclude name="UseProperClassLoader"/>
+  </rule>
+  <rule ref="category/java/errorprone.xml/AssignmentInOperand">
+    <properties>
+      <!-- for (String line; (line = next()) != null; ) reads up to the end. -->
+      <property name="allowFor" value="true"/>
+      <property name="allowWhile" value="true"/>
+    </properties>
+  </rule>
+  <rule ref="category/java/errorprone.xml/EmptyCatchBlock">
+    <properties>
+      <!-- An exception that is expected says why in a comment. -->
+      <property name="allowCommentedBlocks" value="true"/>
+    </properties>
+  </rule>
+
+  <rule ref="category/java/multithreading.xml">
+    <!-- The downloader hands parts from the HTTP client's thread to the caller's on purpose. -->
+    <exclude name="AvoidSynchronizedStatement"/>
+    <exclude name="AvoidUsingVolatile"/>
+    <exclude name="DoNotUseThreads"/>
+    <exclude name="UseConcurrentHashMap"/>
+  </rule>
+
+  <rule ref="category/java/performance.xml">
+    <!-- An object per loop pass is what the JIT is good at. -->
+    <exclude name="AvoidInstantiatingObjectsInLoops"/>
+  </rule>
+
+  <rule ref="category/java/security.xml"/>
+</ruleset>

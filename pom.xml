@@ -181,6 +181,31 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <!-- PMD and its copy-paste detector over the main code: verify fails on a finding. -->
+        <artifactId>maven-pmd-plugin</artifactId>
+        <version>3.28.0</version>
+        <configuration>
+          <rulesets>
+            <ruleset>${maven.multiModuleProjectDirectory}/config/pmd/rules.xml</ruleset>
+          </rulesets>
+          <!-- The rules each class is let off until it is refactored. -->
+          <excludeFromFailureFile>${maven.multiModuleProjectDirectory}/config/pmd/baseline.properties</excludeFromFailureFile>
+          <minimumTokens>50</minimumTokens>
+          <printFailingErrors>true</printFailingErrors>
+          <!-- A file PMD cannot parse fails the build instead of going unchecked. -->
+          <skipPmdError>false</skipPmdError>
+          <linkXRef>false</linkXRef>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+              <goal>cpd-check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 </project>

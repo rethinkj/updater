@@ -81,7 +81,7 @@ public final class Downloader {
             + ", received " + actual);
       }
       return new Download(file, actual);
-    } catch (Throwable e) { // also an Error, say from progress: the path never reaches the caller
+    } catch (Throwable e) { // NOPMD: also an Error from progress; the path never reaches the caller
       try {
         Files.deleteIfExists(file);
       } catch (IOException d) {
@@ -183,7 +183,7 @@ public final class Downloader {
   private static final class Parts implements Flow.Subscriber<List<ByteBuffer>> {
 
     private static final Object END = new Object();
-    private final BlockingQueue<Object> parts = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Object> queue = new LinkedBlockingQueue<>();
     private volatile Flow.Subscription subscription;
     private volatile boolean cancelled;
 
@@ -199,24 +199,24 @@ public final class Downloader {
 
     @Override
     public void onNext(List<ByteBuffer> part) {
-      parts.add(part);
+      queue.add(part);
     }
 
     @Override
     public void onError(Throwable error) {
-      parts.add(error);
+      queue.add(error);
     }
 
     @Override
     public void onComplete() {
-      parts.add(END);
+      queue.add(END);
     }
 
     /** The next part, or {@code null} at the end of the body. */
     List<ByteBuffer> next(URI uri) throws IOException {
       Object part;
       try {
-        part = parts.poll(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        part = queue.poll(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new InterruptedIOException("Interrupted while downloading " + uri);
@@ -226,7 +226,7 @@ public final class Downloader {
             uri + " sent nothing for " + TIMEOUT.toSeconds() + " seconds");
       }
       if (part == END) {
-        return null;
+        return null; // NOPMD: the end, which an empty part is not
       }
       if (part instanceof Throwable error) {
         throw new IOException("Could not download " + uri + ": " + error.getMessage(), error);

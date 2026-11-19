@@ -49,7 +49,7 @@ public final class Helper {
   static int run(Path file) {
     Path folder = file.toAbsolutePath().getParent();
     // Held until the result is written, or the helper is ended: core starts no helper meanwhile.
-    FileChannel lock = null;
+    FileChannel lock = null; // NOPMD: closed below, after the result
     try {
       lock = FileChannel.open(
           folder.resolve("helper.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -92,7 +92,7 @@ public final class Helper {
       status = "rolled-back";
       reason = e.reason;
       message = e.getMessage();
-    } catch (Exception e) { // also a RuntimeException from a broken archive
+    } catch (Exception e) { // NOPMD: also a RuntimeException from a broken archive
       status = "rejected";
       reason = "failed";
       message = e.toString();

@@ -3,6 +3,7 @@ package com.rethinkj.updater.helper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Serial;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -18,6 +19,7 @@ import java.time.Duration;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -37,6 +39,9 @@ final class Replace {
 
   /** The swap began but could not finish, and the old version is back in place. */
   static final class RolledBack extends Exception {
+    @Serial
+    private static final long serialVersionUID = 1L;
+
     final String reason;
 
     RolledBack(String reason, String message) {
@@ -156,7 +161,7 @@ final class Replace {
   private static void carryOver(Path app, Path next) throws IOException {
     Path list = app.resolve(LIST);
     Set<String> listed = Files.isRegularFile(list) ? new HashSet<>(Files.readAllLines(list)) : null;
-    TreeSet<String> own = files(next);
+    SortedSet<String> own = files(next);
     try (Stream<Path> paths = Files.walk(app)) {
       for (Path file : (Iterable<Path>) paths::iterator) {
         String name = name(app.relativize(file));
@@ -192,7 +197,7 @@ final class Replace {
   }
 
   /** The paths of the files in {@code folder}, without the list. */
-  private static TreeSet<String> files(Path folder) throws IOException {
+  private static SortedSet<String> files(Path folder) throws IOException {
     try (Stream<Path> paths = Files.walk(folder)) {
       return paths
           .filter(p -> !Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS))

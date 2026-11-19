@@ -80,18 +80,26 @@ public record Version(int major, int minor, int patch, List<String> preRelease, 
   }
 
   @Override
-  public int compareTo(Version o) {
+  public int compareTo(Version o) { // NOPMD: a record has equals and hashCode
     int c = Integer.compare(major, o.major);
-    if (c == 0) c = Integer.compare(minor, o.minor);
-    if (c == 0) c = Integer.compare(patch, o.patch);
-    if (c != 0) return c;
+    if (c == 0) {
+      c = Integer.compare(minor, o.minor);
+    }
+    if (c == 0) {
+      c = Integer.compare(patch, o.patch);
+    }
+    if (c != 0) {
+      return c;
+    }
     // A release ranks above its pre-releases.
     if (preRelease.isEmpty() || o.preRelease.isEmpty()) {
       return Boolean.compare(preRelease.isEmpty(), o.preRelease.isEmpty());
     }
     for (int i = 0; i < Math.min(preRelease.size(), o.preRelease.size()); i++) {
       c = compareIdentifiers(preRelease.get(i), o.preRelease.get(i));
-      if (c != 0) return c;
+      if (c != 0) {
+        return c;
+      }
     }
     return Integer.compare(preRelease.size(), o.preRelease.size());
   }
@@ -112,9 +120,8 @@ public record Version(int major, int minor, int patch, List<String> preRelease, 
   /** The version as SemVer text, without a leading {@code v}. */
   @Override
   public String toString() {
-    String s = major + "." + minor + "." + patch;
-    if (!preRelease.isEmpty()) s += "-" + String.join(".", preRelease);
-    if (!build.isEmpty()) s += "+" + build;
-    return s;
+    return major + "." + minor + "." + patch
+        + (preRelease.isEmpty() ? "" : "-" + String.join(".", preRelease))
+        + (build.isEmpty() ? "" : "+" + build);
   }
 }

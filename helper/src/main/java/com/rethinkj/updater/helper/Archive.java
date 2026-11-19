@@ -29,9 +29,13 @@ import java.util.zip.ZipFile;
  */
 final class Archive {
 
+  /** The end of a tar archive. A name alone does not tell it: a ustar name may be all prefix. */
+  private static final byte[] END = new byte[512];
+
   private Archive() {}
 
   /** What a pass over an archive is given for each entry. */
+  @FunctionalInterface
   private interface Visitor {
     /**
      * @param mode the entry's Unix permissions, or -1 in a zip, which {@code java.util.zip} does not
@@ -173,9 +177,6 @@ final class Archive {
     }
   }
 
-  /** The end of a tar archive. A name alone does not tell it: a ustar name may be all prefix. */
-  private static final byte[] END = new byte[512];
-
   private static void readTar(InputStream in, Visitor visitor) throws IOException {
     byte[] header = new byte[512];
     String longName = null; // from a GNU or PAX header, for the entry that follows it
@@ -201,7 +202,9 @@ final class Archive {
           byte[] bytes = data.readAllBytes();
           longName = string(bytes, 0, bytes.length);
         }
-        case 'x' -> longName = paxPath(data.readAllBytes());
+        case 'x' -> {
+          longName = paxPath(data.readAllBytes());
+        }
         case 'g' -> { // PAX values for all entries; paxPath rejects a size or sparse map in them
           if (paxPath(data.readAllBytes()) != null) {
             throw new IOException("The tar archive gives all its files one path");
@@ -248,7 +251,7 @@ final class Archive {
         }
         i += length;
       }
-    } catch (RuntimeException e) { // a bad length
+    } catch (NumberFormatException | IndexOutOfBoundsException e) { // a bad length
       throw new IOException("The tar archive has a bad PAX header", e);
     }
     return path;

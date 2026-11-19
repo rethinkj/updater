@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.util.List;
 
 /** Where the versions of an app are published, such as {@link GitHubSource}. */
-public interface Source {
+public interface Source { // NOPMD: implemented by sources, not meant as a lambda
 
   /**
    * The published releases, in no particular order. Releases whose tag is not a SemVer version,
