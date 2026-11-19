@@ -1,6 +1,6 @@
 ---
 title: Platforms
-description: The operating systems and the JDK rethinkj Updater targets.
+description: The operating systems and the JDK rethinkj Updater targets, and what is tested on each.
 ---
 
 | | |
@@ -9,4 +9,20 @@ description: The operating systems and the JDK rethinkj Updater targets.
 | Linux | x64 |
 | JDK | 25, any distribution |
 
-macOS is not a target. The CI builds and tests everything on Linux and Windows.
+macOS is not a target.
+
+## Tested
+
+The CI builds everything and runs every test on Ubuntu 24.04 and on GitHub's latest Windows Server, with Temurin 25. The tests use no network: sources answer from a local server with recorded responses, and the files an update replaces lie in a temporary folder whose path has a space and a character beyond ASCII.
+
+| | Linux | Windows |
+| --- | --- | --- |
+| The [example app](/docs/concepts/applying-updates#from-the-app), built with jpackage, finds, downloads and applies its update through its launcher, and keeps the new version once it confirms | ✓ | ✓ |
+| A new version that exits without confirming is ended with the process it started, and the old version is put back and started | ✓ | ✓ |
+| A failure halfway through unpacking, or a rename that fails, leaves the old version in place | ✓ | ✓ |
+| A locked file: the helper tries again, and changes nothing if it stays locked | | ✓ |
+| A tar.gz keeps which files are executable | ✓ | |
+| Links in a tar inside the app's folder are kept, links out of it rejected | ✓ | |
+| The user's files are carried over, but never through a link | ✓ | ✓, without links |
+
+Windows creates links only with extra rights, has no executable bit, and alone locks open files, so those tests run on one platform. The tests against the real GitHub run only with `-Dnetwork.tests=true`.

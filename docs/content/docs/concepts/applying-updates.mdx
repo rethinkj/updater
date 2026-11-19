@@ -13,6 +13,8 @@ core and the helper work together through files in an update folder the app name
 
 Ship the helper JAR with the app, on its class path: add `rethinkj-updater-helper` beside `rethinkj-updater-core`, with the same version. The app never calls it; core finds it there and starts it.
 
+The code on this page is from [`ApplyUpdate`](https://github.com/rethinkj/updater/blob/main/examples/src/test/java/com/rethinkj/updater/examples/docs/ApplyUpdate.java), an app that updates itself at every start. Its test builds it with jpackage, [packs it](/docs/get-started/package-the-app) as a release, and lets it find, download and apply the next version on Linux and Windows.
+
 `Installation` stands for the installed app: its folder, or its JAR if the app is a single JAR, and the update folder, which lies outside the app's folder and is the same for every version, such as `updates` in `%LOCALAPPDATA%\MyApp`. An app started by a launcher that jpackage built gets both from the launcher:
 
 ```java snippet="installation"
@@ -30,12 +32,22 @@ Once the app is ready for use, it confirms that it runs. A version the helper ha
 ```java snippet="confirm"
 ```
 
+Then it looks for an update, as on [Check for updates](/docs/get-started/check-for-updates). Right after an update that failed, it does not try again: the same update would fail the same way.
+
+```java snippet="find-update"
+```
+
 Before it downloads an update, the app asks whether the user may write to its folder and the folder above it. Without that, the helper cannot replace the app, and asking for rights is not implemented yet:
 
 ```java snippet="writable"
 ```
 
-With the [download](/docs/get-started/check-for-updates#download-and-verify), the app starts the helper:
+It downloads the [archive](#archives) for its platform, verified, into the update folder:
+
+```java snippet="download-archive"
+```
+
+With the download, the app starts the helper:
 
 ```java snippet="apply"
 ```
@@ -73,11 +85,7 @@ If the helper is ended before the renames, when the user logs off for instance, 
 
 ## The app's own files
 
-The helper tells the app's files from the user's by `rethinkj-updater.files`, the [file list](/docs/reference/helper-files#file-list) in the app's folder. It writes the list of each new version. So that the first installation brings one, write it into the app's folder once the app is built, before it is packed:
-
-```sh
-java -jar rethinkj-updater-helper.jar list <folder>
-```
+The helper tells the app's files from the user's by `rethinkj-updater.files`, the [file list](/docs/reference/helper-files#file-list) in the app's folder. It writes the list of each new version. So that the first installation brings one, write it into the app's folder once the app is built, before it is packed, as [Package the app](/docs/get-started/package-the-app) shows.
 
 - A file the list names is replaced by the new version, or dropped if the new version does not have it.
 - Any other file, such as settings the app keeps in its folder, is carried over into the new version, also in place of a file of the same path that the new version brings. The new list does not name it either. If the new version makes the folder that holds such a file a link, the helper rejects the update and changes nothing.

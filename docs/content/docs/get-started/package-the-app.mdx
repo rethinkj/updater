@@ -1,0 +1,44 @@
+---
+title: Package the app
+description: How to build an app image that the helper can update, write its file list and pack it for a release.
+---
+
+An update is the whole app: the folder that jpackage builds, packed as a tar.gz on Linux and as a zip on Windows. Before it is packed, the folder gets the list of its own files, so that the helper can tell them from files the user keeps there. The installer that brings the first version is made from the same folder, so the first installation has the list too. The example app [`ApplyUpdate`](https://github.com/rethinkj/updater/blob/main/examples/src/test/java/com/rethinkj/updater/examples/docs/ApplyUpdate.java) is built, packed and updated this way in the CI, on both platforms.
+
+## Build the image
+
+```sh
+jpackage --type app-image --name MyApp --dest dist --input target/libs --main-jar myapp.jar --jlink-options "--strip-debug --no-man-pages --no-header-files"
+```
+
+`--input` holds the app's JARs, `rethinkj-updater-core`, its dependencies, and `rethinkj-updater-helper` of the same version. The `--jlink-options` leave out `--strip-native-commands`, which jpackage uses otherwise, so that the runtime keeps `bin/java` for the helper. If `--add-modules` names the runtime's modules, it includes `java.net.http`, which core needs.
+
+## Write the file list
+
+Once everything that belongs to the version is in the folder, the helper writes the list of its files into it, as `rethinkj-updater.files`:
+
+```sh
+java -jar target/libs/rethinkj-updater-helper-<version>.jar list dist/MyApp
+```
+
+A file added to the folder after this step counts as the user's: an update carries it over instead of replacing it. See [The app's own files](/docs/concepts/applying-updates#the-apps-own-files).
+
+## Pack it
+
+On Linux:
+
+```sh
+tar -czf myapp-1.3.0-linux-x64.tar.gz -C dist MyApp
+```
+
+On Windows, with the `tar.exe` that Windows brings, which writes a zip for a name that ends in `.zip`:
+
+```sh
+tar.exe -a -cf myapp-1.3.0-windows-x64.zip -C dist MyApp
+```
+
+The archive holds the folder `MyApp/`, whose contents the helper makes the app's folder. To make the installer of a first installation, run jpackage once more with `--type deb`, `rpm`, `msi` or `exe` and `--app-image dist/MyApp`.
+
+## Publish it
+
+Attach the archives to a release whose tag is the version, such as `v1.3.0` on GitHub, which reports their SHA-256 checksums. The app picks the archive for its platform by name, as on [Applying updates](/docs/concepts/applying-updates#from-the-app).

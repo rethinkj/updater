@@ -5,7 +5,7 @@ description: What rethinkj Updater is, what state it is in, and where to start.
 
 rethinkj Updater is a Java 25 library that keeps a desktop app up to date on Windows and Linux. It finds new releases, reads their release notes, downloads and verifies them, and replaces the app's files once the app has exited.
 
-**Status: early.** Little is implemented yet: versions, reading GitHub releases, finding the update, downloading it with SHA-256 verification, and the helper that replaces the app's files once it has exited, starts the new version and puts the old one back if the new one does not confirm that it runs. The version is `0.1.0-SNAPSHOT`, published as SNAPSHOTs from every push to `main`. The pages under [Concepts](/docs/concepts) describe the intended design, which may still change.
+**Status: early.** Little is implemented yet: versions, reading GitHub releases, finding the update, downloading it with SHA-256 verification, and the helper that replaces the app's files once it has exited, starts the new version and puts the old one back if the new one does not confirm that it runs. The version is `0.1.0-SNAPSHOT`, published as SNAPSHOTs from every push to `main`. The pages under [Concepts](/docs/concepts) describe what is built and name what is not yet.
 
 ## What it is meant to do
 
@@ -31,6 +31,7 @@ Both share the group `com.rethinkj.updater`.
 | --- | --- |
 | [Installation](/docs/get-started) | Add the dependency to a Maven project |
 | [Check for updates](/docs/get-started/check-for-updates) | Find an update on GitHub, show its notes and download it |
+| [Package the app](/docs/get-started/package-the-app) | Build, list and pack an app so that it can be updated |
 | [Concepts](/docs/concepts) | How it is meant to work, topic by topic |
 | [Reference](/docs/reference) | Platforms and the changelog |
 
