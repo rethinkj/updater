@@ -3,6 +3,7 @@ package com.rethinkj.updater;
 import java.io.IOException;
 import java.net.URI;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The releases of a repository on a Gitea or Forgejo instance, such as codeberg.org, read through
@@ -18,6 +19,7 @@ import java.util.List;
 public final class GiteaSource implements Source {
 
   private final GitHubSource api;
+  private final String path;
 
   /**
    * A repository on a Gitea or Forgejo instance.
@@ -30,12 +32,10 @@ public final class GiteaSource implements Source {
    *     neither https nor on this machine, or {@code token} has characters other than visible ASCII
    */
   public GiteaSource(URI instance, String repository, String token) {
-    // With a slash before the API's path, so that an instance below a path keeps it.
-    api = new GitHubSource(
-        URI.create(instance.toString().replaceFirst("/*$", "/") + "api/v1/"),
-        repository,
-        token,
-        false);
+    // With a slash at its end, so that an instance below a path keeps it below the API's path.
+    path =
+        Objects.requireNonNullElse(instance.normalize().getRawPath(), "").replaceFirst("/*$", "/");
+    api = new GitHubSource(instance.resolve(path + "api/v1/"), repository, token, false);
   }
 
   @Override
@@ -43,8 +43,14 @@ public final class GiteaSource implements Source {
     return api.releases();
   }
 
-  /** The Authorization header for {@code uri}, which only the instance gets. */
+  /**
+   * The Authorization header for {@code uri}, or {@code null} if there is no token or the address
+   * is not below the instance's: another app on the same host must not get it either.
+   */
   String authorization(URI uri) {
-    return api.authorization(uri);
+    String authorization = api.authorization(uri);
+    return authorization != null && uri.normalize().getRawPath().startsWith(path)
+        ? authorization
+        : null;
   }
 }

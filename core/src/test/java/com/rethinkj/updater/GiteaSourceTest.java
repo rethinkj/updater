@@ -4,6 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.net.httpserver.HttpServer;
@@ -154,6 +155,14 @@ class GiteaSourceTest {
 
     assertArrayEquals(runner, Files.readAllBytes(file));
     assertEquals("null", authorization.get("storage"));
+    // An instance below a path gets the token there, and another app on the same host does not.
+    GiteaSource below =
+        new GiteaSource(URI.create(base + "forgejo"), "forgejo/forgejo", "test-token");
+    assertEquals(
+        "Bearer test-token",
+        below.authorization(URI.create(base + "forgejo/forgejo/forgejo/releases/download/v1/a")));
+    assertNull(below.authorization(URI.create(base + "storage/runner")));
+    assertNull(below.authorization(URI.create(base + "forgejo/../storage/runner")));
   }
 
   private static String sha256(byte[] bytes) {

@@ -41,8 +41,8 @@ import java.util.regex.Pattern;
  *
  * <p>Files are downloaded from {@link Asset#url()}, over https or from this machine. A downloader
  * given a {@link GitHubSource} or a {@link GiteaSource} with a token sends the token with requests
- * to its API's host, never to where that redirects, so that it downloads the files of a private
- * repository too. To cancel
+ * to GitHub's API host or below the Gitea instance's address, never to where that redirects, so
+ * that it downloads the files of a private repository too. To cancel
  * a download, interrupt the thread that runs it, for instance with {@link
  * java.util.concurrent.Future#cancel(boolean) Future.cancel(true)}. A download that sends nothing
  * for 30 seconds fails.
@@ -200,7 +200,7 @@ public final class Downloader {
   }
 
   /**
-   * Asks for the file at {@code uri}. A source's token goes only to its API's host: where that
+   * Asks for the file at {@code uri}. A source's token goes only to the service: where that
    * redirects, such as to a CDN, is asked without it.
    */
   private HttpResponse<Flow.Publisher<List<ByteBuffer>>> open(URI uri) throws IOException {
