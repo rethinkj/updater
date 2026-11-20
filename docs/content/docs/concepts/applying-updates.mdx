@@ -75,13 +75,13 @@ While a helper is at work, until it has written its result, starting another one
 
 1. It checks the download's SHA-256 again, since hours may pass between the download and the app's exit.
 2. It builds the new version beside the app's folder, as `<app>.new-<n>`, and carries over the files that belong to the user, not to the app.
-3. It renames `<app>` to `<app>.backup-<n>`, and `<app>.new-<n>` to `<app>`. If the second rename fails, it renames the backup back.
+3. It renames `<app>` to `<app>.backup-<n>`, and `<app>.new-<n>` to `<app>`, and names the backup in the update folder. If the second rename fails, it renames the backup back.
 4. With `restart`, it starts the new version and waits for its confirmation. Without one, it renames the new version aside and the backup back to `<app>`, the same way, and deletes the new version.
-5. Once the new version is in place, and with `restart` has confirmed, it deletes the backup, and of a link or a Windows junction in it only the link.
+5. Once the new version is in place, and with `restart` has confirmed, it writes the result and deletes the backup, and of a link or a Windows junction in it only the link.
 
 While a rename fails, because another process has a file open, such as a virus scanner on Windows, the helper tries again for 30 seconds before it gives up, with the reason `locked`. A single JAR is replaced the same way: the new JAR is written beside it, then the two are renamed.
 
-If the helper is ended before the renames, when the user logs off for instance, nothing has changed. If it is ended between the two renames, or cannot rename the old version back, the app's folder is missing and the old version is in `<app>.backup-<n>`. What the helper cannot delete, as a file that Windows holds open, stays beside the app's folder, where it is in the way of nothing.
+If the helper is ended before the renames, when the user logs off for instance, nothing has changed. If it is ended between the two renames, or cannot rename the old version back, the app's folder is missing and the old version is in `<app>.backup-<n>`. A helper ended later, before it reports, as while it waits for the new version to confirm, leaves the report to `result()` at the next start: `APPLIED` if the helper named the backup in `backup.properties` in the update folder and the backup is still beside the app's folder, since the new version is then in place and runs, and it deletes the backup; else `REJECTED` with the reason `failed`, even if the new version is in place, and it leaves what is beside the app's folder. So does a helper that is ended while it waits for the app to exit, as at a shutdown after `replaceOnExit`. What the helper cannot delete, as a file that Windows holds open, or a backup it was deleting when it was ended after its result, stays beside the app's folder, where it is in the way of nothing.
 
 ## The app's own files
 

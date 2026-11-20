@@ -106,6 +106,7 @@ class ApplyUpdateTest {
         new Installation(app, updates, List.of()).result().orElseThrow();
     assertEquals(Installation.Result.Status.APPLIED, reported.status(), reported::message);
     assertEquals("1.3.0", Files.readString(app.resolve("version.txt")));
+    waitForTheApp(); // and the helper, which deletes the old version once it has reported
     assertNothingBeside();
   }
 

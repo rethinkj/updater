@@ -10,14 +10,15 @@ core and the helper (`rethinkj-updater-helper`) do not call each other. core sta
 | `plan.properties` | update folder | core of the installed version | the helper of the same version |
 | `confirmed.properties` | update folder | core of the new version, once it runs | the helper that started it |
 | `result.properties` | update folder | the helper | core, when the app starts next |
+| `backup.properties` | update folder | the helper, once the new version is in place | core, if the helper was ended before it wrote the result |
 | `helper.lock` | update folder | the helper, which locks it until it has written the result | core, which starts no helper while it is locked |
 | `rethinkj-updater.files` | app folder | the build, or the helper after an update | the helper of a later update |
 
-The update folder is one the app names, outside its own folder, such as `%LOCALAPPDATA%\MyApp\updates`. The files in it have fixed names, so that a new version finds them although it did not write the plan. core also keeps its copies of the helper there, in folders `helper-<n>`, which it deletes, and the output of a helper whose JVM fails in `helper.log`; neither is part of the contract, and the app keeps nothing of its own under these names. A lock on `helper.lock` goes with the helper's process, so a helper that is ended releases it as well.
+The update folder is one the app names, outside its own folder, such as `%LOCALAPPDATA%\MyApp\updates`. The files in it have fixed names, so that a new version finds them although it did not write the plan. core also keeps its copies of the helper there, in folders `helper-<n>`, which it deletes, and the output of a helper whose JVM fails in `helper.log`; neither is part of the contract, and the app keeps nothing of its own under these names. A lock on `helper.lock` goes with the helper's process, so a helper that is ended releases it as well. A helper that cannot lock it changes nothing and reports the reason `failed`.
 
 ## Rules
 
-- `plan.properties`, `confirmed.properties` and `result.properties` are Java properties files in UTF-8, as `Properties.load(Reader)` reads them, each with a key `format`.
+- `plan.properties`, `confirmed.properties`, `result.properties` and `backup.properties` are Java properties files in UTF-8, as `Properties.load(Reader)` reads them, each with a key `format`.
 - A reader ignores keys it does not know. A format can gain a key only if a reader that ignores it still does the right thing.
 - A helper that does not read the plan's format changes nothing and writes a result with the reason `format`.
 - The manifest of the helper JAR lists the plan formats the helper reads in the attribute `Rethinkj-Updater-Plan-Formats`, separated by spaces. core writes the highest format both read.
@@ -45,12 +46,18 @@ core writes the plan before it starts the helper, for instance on Linux:
 
 The new version writes `confirmed.properties`, with `format=1`, once it runs. The helper deletes an earlier one before it starts the new version. If it does not arrive within `confirm.seconds`, or the app exits before, the helper restores the old version and starts that. With `mode=restart`, the helper also starts the old version if it changed nothing. It writes the result before it starts the old version, and after the new version has confirmed.
 
+## Backup
+
+Once the new version is in place, before it starts it, the helper writes `backup.properties` with `format=1` and `backup`, the path of the old version, `<app>.backup-<n>`. It deletes the file once the new version has failed to confirm, before it ends it and puts the old version back, and it deletes the old version only once it has written the result. core deletes the file when it reads the result, and before it writes a plan.
+
+A plan without a result, while no helper holds `helper.lock`, means that the helper was ended before it reported, as when the user logs off. Then `result()` reports in its place: `applied` if the file names an old version that is still beside the app's folder, which it then deletes, since the new version is in place and runs; otherwise `rejected` with the reason `failed`, since the app's folder may hold either version, and it deletes nothing.
+
 ## Result
 
 | Key | Value |
 | --- | --- |
 | `format` | `1` |
-| `status` | `applied`; `rolled-back` if the old version is back in place; `rejected` if nothing changed. One exception: if the helper cannot rename the old version back, the app's folder is missing or holds the new version that did not confirm, and it writes `rejected` with the reason `failed` and a message that names the folder holding the old version. |
+| `status` | `applied`; `rolled-back` if the old version is back in place; `rejected` if nothing changed. One exception: if the helper cannot rename the old version back, the app's folder is missing or holds the new version that did not confirm, and it writes `rejected` with the reason `failed` and a message that names the folder holding the old version. core also reports `rejected` with the reason `failed` for a helper that was ended before it reported, when it cannot tell which version is in place; see [Backup](#backup). |
 | `reason` | With `rolled-back` or `rejected`: one of the codes below. |
 | `message` | A sentence in English for a log, not for parsing. |
 

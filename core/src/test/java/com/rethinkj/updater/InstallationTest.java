@@ -1,5 +1,6 @@
 package com.rethinkj.updater;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.WRITE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -8,11 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.io.Writer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -31,7 +34,10 @@ class InstallationTest {
     Installation installation = new Installation(app, updates, List.of());
 
     Files.writeString(updates.resolve("plan.properties"), "format=1\n");
-    assertEquals(Optional.empty(), installation.result());
+    try (FileChannel lock = FileChannel.open(updates.resolve("helper.lock"), CREATE, WRITE);
+        var _ = lock.lock()) {
+      assertEquals(Optional.empty(), installation.result());
+    }
     assertTrue(Files.exists(copy), "deleted while the helper is at work");
 
     Files.writeString(
@@ -43,6 +49,36 @@ class InstallationTest {
     assertFalse(Files.exists(copy));
     assertTrue(Files.exists(beside.resolve("file")), "the helper deletes what it built");
     assertTrue(Files.exists(download.resolve("file")));
+  }
+
+  @Test
+  void reportsInPlaceOfAHelperThatWasEndedAndDeletesOnlyTheBackupItNamed() throws Exception {
+    Path app = folder(temp.resolve("Bücher App"));
+    Path updates = folder(temp.resolve("updates"));
+    Path backup = folder(temp.resolve("Bücher App.backup-1"));
+    Path plan = updates.resolve("plan.properties");
+    Installation installation = new Installation(app, updates, List.of());
+
+    // As a helper leaves it that does not name the backup, such as one of an older version.
+    Files.writeString(plan, "format=1\n");
+    Installation.Result unknown = installation.result().orElseThrow();
+    assertEquals(Installation.Result.Status.REJECTED, unknown.status());
+    assertEquals("failed", unknown.reason());
+    assertTrue(Files.exists(backup.resolve("file")));
+    assertEquals(Optional.empty(), installation.result());
+
+    Files.writeString(plan, "format=1\n");
+    Properties named = new Properties();
+    named.setProperty("format", "1");
+    named.setProperty("backup", backup.toRealPath().toString());
+    try (Writer out = Files.newBufferedWriter(updates.resolve("backup.properties"), UTF_8)) {
+      named.store(out, null);
+    }
+    Installation.Result applied = installation.result().orElseThrow();
+    assertEquals(Installation.Result.Status.APPLIED, applied.status(), applied.message());
+    assertFalse(Files.exists(backup));
+    assertTrue(Files.exists(app.resolve("file")));
+    assertEquals(Optional.empty(), installation.result());
   }
 
   @Test
