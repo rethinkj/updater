@@ -1,0 +1,36 @@
+[
+  {
+    "id": 219950,
+    "tag_name": "v0.1.0",
+    "target_commitish": "main",
+    "name": "v0.1.0",
+    "body": "",
+    "url": "https://gitea.com/api/v1/repos/gitea/runner/releases/219950",
+    "html_url": "https://gitea.com/gitea/runner/releases/tag/v0.1.0",
+    "tarball_url": "https://gitea.com/gitea/runner/archive/v0.1.0.tar.gz",
+    "zipball_url": "https://gitea.com/gitea/runner/archive/v0.1.0.zip",
+    "upload_url": "https://gitea.com/api/v1/repos/gitea/runner/releases/219950/assets",
+    "draft": false,
+    "prerelease": true,
+    "created_at": "2023-04-05T03:05:37Z",
+    "published_at": "2023-04-05T03:05:37Z",
+    "assets": []
+  },
+  {
+    "id": 218110,
+    "tag_name": "v0.0.1",
+    "target_commitish": "main",
+    "name": "v0.0.1",
+    "body": "this tag exists for goreleaser to be able to build nightly releases. please don't use it as a release to target.",
+    "url": "https://gitea.com/api/v1/repos/gitea/runner/releases/218110",
+    "html_url": "https://gitea.com/gitea/runner/releases/tag/v0.0.1",
+    "tarball_url": "https://gitea.com/gitea/runner/archive/v0.0.1.tar.gz",
+    "zipball_url": "https://gitea.com/gitea/runner/archive/v0.0.1.zip",
+    "upload_url": "https://gitea.com/api/v1/repos/gitea/runner/releases/218110/assets",
+    "draft": false,
+    "prerelease": true,
+    "created_at": "2023-02-26T04:20:33Z",
+    "published_at": "2023-02-26T04:20:33Z",
+    "assets": []
+  }
+]

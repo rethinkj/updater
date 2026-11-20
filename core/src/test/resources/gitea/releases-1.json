@@ -1,0 +1,47 @@
+[
+  {
+    "id": 994062,
+    "tag_name": "v6.0.0",
+    "target_commitish": "b5305c678573d84811486acdae638db9f751189a",
+    "name": "v6.0.0",
+    "body": "## ⚠️ Breaking changes\n\n### `builtin:checkout` is removed (https://gitea.com/gitea/runner/pulls/1407)\n\nWe decided to remove it because it could not be pinned to a version and went against the spirit of shareable actions. We recommend `actions/checkout`, or [`taiki-e/checkout-action`](https://github.com/taiki-e/checkout-action) without Node.\n\n### Gitea 1.26.2 or newer is required (https://gitea.com/gitea/runner/pulls/1395)\n\nWith older Gitea versions, most job logs stay in the database's `dbfs_data` table instead of being archived.\n\n## Enhancements\n\n- Make `runner.tool_cache_mode: shared` safe at any `runner.capacity`, with one tool cache per concurrent job https://gitea.com/gitea/runner/pulls/1401\n- Add `ubuntu-26.04` to the default labels of newly registered runners https://gitea.com/gitea/runner/pulls/1396\n\n## Bug fixes\n\n- Fix cache and artifact steps failing when the runner picked an IPv6 address at startup https://gitea.com/gitea/runner/pulls/1398\n- Fix non-root runners leaving behind `container.bind_workdir` workspaces with root-owned files https://gitea.com/gitea/runner/pulls/1399\n- Fix `hashFiles()` with number, boolean or null arguments, and mixed-case or indented `::group::` commands https://gitea.com/gitea/runner/pulls/1394\n- Fix jobs hanging past cancellation when the Docker daemon stops answering https://gitea.com/gitea/runner/pulls/1404\n\n## Docs\n\n- Add a [launchd example](https://gitea.com/gitea/runner/src/branch/main/examples/launchd) to run the runner on macOS https://gitea.com/gitea/runner/pulls/1408\n\n**Full changelog**: https://gitea.com/gitea/runner/compare/v5.4.1...v6.0.0\n",
+    "url": "https://gitea.com/api/v1/repos/gitea/runner/releases/994062",
+    "html_url": "https://gitea.com/gitea/runner/releases/tag/v6.0.0",
+    "tarball_url": "https://gitea.com/gitea/runner/archive/v6.0.0.tar.gz",
+    "zipball_url": "https://gitea.com/gitea/runner/archive/v6.0.0.zip",
+    "upload_url": "https://gitea.com/api/v1/repos/gitea/runner/releases/994062/assets",
+    "draft": false,
+    "prerelease": false,
+    "created_at": "2026-11-10T17:17:35Z",
+    "published_at": "2026-11-11T10:50:12Z",
+    "assets": [
+      {
+        "id": 112582,
+        "name": "checksums.txt",
+        "size": 2601,
+        "download_count": 2803,
+        "created_at": "2026-11-11T10:52:14Z",
+        "uuid": "50396879-af6b-4402-89c6-f604f8d777bf",
+        "browser_download_url": "https://gitea.com/gitea/runner/releases/download/v6.0.0/checksums.txt"
+      },
+      {
+        "id": 112595,
+        "name": "gitea-runner-6.0.0-linux-amd64",
+        "size": 17703072,
+        "download_count": 2723,
+        "created_at": "2026-11-11T10:52:16Z",
+        "uuid": "a76dcc27-e159-4ec6-92f2-30b2b29da126",
+        "browser_download_url": "https://gitea.com/gitea/runner/releases/download/v6.0.0/gitea-runner-6.0.0-linux-amd64"
+      },
+      {
+        "id": 112609,
+        "name": "gitea-runner-6.0.0-windows-amd64.exe",
+        "size": 18171392,
+        "download_count": 909,
+        "created_at": "2026-11-11T10:52:16Z",
+        "uuid": "338eee09-e30d-4c5e-857b-a83e5fad41a3",
+        "browser_download_url": "https://gitea.com/gitea/runner/releases/download/v6.0.0/gitea-runner-6.0.0-windows-amd64.exe"
+      }
+    ]
+  }
+]

@@ -18,6 +18,15 @@ Another constructor takes the API's address, for GitHub Enterprise Server, and a
 
 Without a token GitHub allows 60 requests an hour per IP address. A token raises the limit and lets the releases of a private repository be read. With a token, each `Asset`'s address is in the API, and `new Downloader(source)` downloads it with the token. When the limit is used up, `releases()` throws a `RateLimitException`, whose `retryAt()` says when GitHub accepts requests again. Any other failure is an `IOException` with a message that says what went wrong; nothing is printed.
 
+## Gitea and Forgejo
+
+`GiteaSource` reads the releases of a repository on a Gitea or Forgejo instance, such as [Codeberg](https://codeberg.org), given as the instance's address, owner and name, and a token or `null`:
+
+```java snippet="gitea-source"
+```
+
+Forgejo, a fork of Gitea, has the same API, and both answer as GitHub's does, so the same rules hold as for `GitHubSource`: https or this machine only, and every page read, 50 releases to a request. Neither reports a file's SHA-256 checksum, so a release needs a checksum file (see [Verification](/docs/concepts/verification)). A token lets the releases of a private repository be read, and `new Downloader(source)` downloads its files with the token, which goes only to the instance, never to where the instance redirects.
+
 ## Not implemented yet
 
-GitLab, Gitea and Forgejo, which share an API, and a JSON manifest on any web server that lists versions, their files and checksums.
+GitLab, and a JSON manifest on any web server that lists versions, their files and checksums.

@@ -40,8 +40,9 @@ import java.util.regex.Pattern;
  * checksum files disagree, is not downloaded.
  *
  * <p>Files are downloaded from {@link Asset#url()}, over https or from this machine. A downloader
- * given a {@link GitHubSource} with a token sends the token with requests to its API, never to
- * where the API redirects, so that it downloads the files of a private repository too. To cancel
+ * given a {@link GitHubSource} or a {@link GiteaSource} with a token sends the token with requests
+ * to GitHub's API host or below the Gitea instance's address, never to where that redirects, so
+ * that it downloads the files of a private repository too. To cancel
  * a download, interrupt the thread that runs it, for instance with {@link
  * java.util.concurrent.Future#cancel(boolean) Future.cancel(true)}. A download that sends nothing
  * for 30 seconds fails.
@@ -69,7 +70,8 @@ public final class Downloader {
 
   /**
    * A downloader for the releases of {@code source}, with its credentials: given a {@link
-   * GitHubSource} with a token, it downloads the files of a private repository through the API.
+   * GitHubSource} or a {@link GiteaSource} with a token, it downloads the files of a private
+   * repository.
    */
   public Downloader(Source source) {
     this.source = Objects.requireNonNull(source, "source");
@@ -198,14 +200,18 @@ public final class Downloader {
   }
 
   /**
-   * Asks for the file at {@code uri}. A {@link GitHubSource}'s token goes only to its API: where
-   * the API redirects, such as to a CDN, is asked without it.
+   * Asks for the file at {@code uri}. A source's token goes only to the service: where that
+   * redirects, such as to a CDN, is asked without it.
    */
   private HttpResponse<Flow.Publisher<List<ByteBuffer>>> open(URI uri) throws IOException {
     if (!allowed(uri, uri)) {
       throw new IOException("Files are downloaded only over https, not from " + uri);
     }
-    String authorization = source instanceof GitHubSource github ? github.authorization(uri) : null;
+    String authorization = switch (source) {
+      case GitHubSource github -> github.authorization(uri);
+      case GiteaSource gitea -> gitea.authorization(uri);
+      case null, default -> null;
+    };
     HttpResponse<Flow.Publisher<List<ByteBuffer>>> response = send(uri, uri, authorization);
     String location = response.headers().firstValue("location").orElse(null);
     if (authorization == null || response.statusCode() / 100 != 3 || location == null) {

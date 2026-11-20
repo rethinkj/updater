@@ -51,6 +51,9 @@ public final class GitHubSource implements Source {
   private final URI api;
   private final String repository;
   private final String token;
+  private final boolean github;
+  private final String service;
+  private final String scope;
   private final HttpClient http;
 
   /**
@@ -72,6 +75,16 @@ public final class GitHubSource implements Source {
    *     neither https nor on this machine, or {@code token} has characters other than visible ASCII
    */
   public GitHubSource(URI api, String repository, String token) {
+    this(api, repository, token, null);
+  }
+
+  /**
+   * A repository on GitHub, or, given {@code instance}, on a service whose API copies GitHub's, as
+   * Gitea's and Forgejo's do ({@link GiteaSource}): named by its host in messages, its files
+   * downloaded from where a browser would, also with a token, and the token sent only below the
+   * path {@code instance}, which ends in a slash.
+   */
+  GitHubSource(URI api, String repository, String token, String instance) {
     if (!OWNER_NAME.matcher(repository).matches()) {
       throw new IllegalArgumentException("Not a repository as owner/name: \"" + repository + "\"");
     }
@@ -84,11 +97,15 @@ public final class GitHubSource implements Source {
       throw new IllegalArgumentException("The token has characters other than visible ASCII");
     }
     // Over plain http anyone on the way could swap a release's addresses and checksums.
-    if (!HTTPS.equalsIgnoreCase(this.api.getScheme())
-        && !("http".equalsIgnoreCase(this.api.getScheme()) && loopback(this.api))) {
+    if (this.api.getHost() == null
+        || !HTTPS.equalsIgnoreCase(this.api.getScheme())
+            && !("http".equalsIgnoreCase(this.api.getScheme()) && loopback(this.api))) {
       throw new IllegalArgumentException(
           "Releases are read only over https or from this machine, not from " + this.api);
     }
+    this.github = instance == null;
+    this.service = github ? "GitHub" : this.api.getHost();
+    this.scope = github ? "" : instance;
     // Redirects are followed by hand, so that the token goes only to the API's own origin.
     this.http = HttpClient.newBuilder()
         .connectTimeout(TIMEOUT)
@@ -99,21 +116,22 @@ public final class GitHubSource implements Source {
   @Override
   public List<Release> releases() throws IOException {
     List<Release> releases = new ArrayList<>();
-    URI next = api.resolve("repos/" + repository + "/releases?per_page=100");
+    URI next =
+        api.resolve("repos/" + repository + "/releases?" + (github ? "per_page=100" : "limit=50"));
     Set<String> seen = new HashSet<>();
     while (next != null) {
       if (!seen.add(next.toString().replaceFirst("#.*", ""))) {
-        throw new IOException("GitHub links back to a page it already sent: " + next);
+        throw new IOException(service + " links back to a page it already sent: " + next);
       }
       HttpResponse<byte[]> response = get(next);
       JsonNode page;
       try {
         page = JSON.readTree(response.body());
       } catch (JacksonException e) {
-        throw new IOException("GitHub's answer from " + next + " is not valid JSON", e);
+        throw new IOException(service + "'s answer from " + next + " is not valid JSON", e);
       }
       if (!page.isArray()) {
-        throw new IOException("GitHub did not answer with a list of releases from " + next);
+        throw new IOException(service + " did not answer with a list of releases from " + next);
       }
       for (JsonNode node : page) {
         release(node).ifPresent(releases::add);
@@ -145,9 +163,11 @@ public final class GitHubSource implements Source {
   private HttpResponse<byte[]> send(URI uri) throws IOException {
     HttpRequest.Builder request = HttpRequest.newBuilder(uri)
         .timeout(TIMEOUT)
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("Accept", github ? "application/vnd.github+json" : "application/json")
         .header("User-Agent", "rethinkj-updater");
+    if (github) {
+      request.header("X-GitHub-Api-Version", "2022-11-28");
+    }
     if (token != null) {
       request.header("Authorization", "Bearer " + token);
     }
@@ -159,14 +179,15 @@ public final class GitHubSource implements Source {
     } catch (InterruptedException _) {
       answer.cancel(true);
       Thread.currentThread().interrupt();
-      throw new InterruptedIOException("Interrupted while asking GitHub for " + uri);
+      throw new InterruptedIOException("Interrupted while asking " + service + " for " + uri);
     } catch (TimeoutException _) {
       answer.cancel(true);
       throw new HttpTimeoutException(
-          "GitHub did not answer " + uri + " within " + TIMEOUT.toSeconds() + " seconds");
+          service + " did not answer " + uri + " within " + TIMEOUT.toSeconds() + " seconds");
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
-      throw new IOException("Could not ask GitHub for " + uri + ": " + cause.getMessage(), cause);
+      throw new IOException(
+          "Could not ask " + service + " for " + uri + ": " + cause.getMessage(), cause);
     }
   }
 
@@ -197,22 +218,22 @@ public final class GitHubSource implements Source {
         retryAt = null; // a time no clock reaches says nothing
       }
       return new RateLimitException(
-          "GitHub's rate limit is used up"
-              + (token == null ? "; a token raises it" : "")
+          service + "'s rate limit is used up"
+              + (github && token == null ? "; a token raises it" : "")
               + (retryAt == null ? "" : ", until " + retryAt),
           retryAt);
     }
     return new IOException(
         switch (status) {
-          case 401 -> "GitHub did not accept the token";
+          case 401 -> service + " did not accept the token";
           case 404 ->
-            "GitHub has no repository " + repository
+            service + " has no repository " + repository
                 + (token == null ? ", or it is private" : " that the token may read");
-          default -> "GitHub answered " + status + " to " + response.uri();
+          default -> service + " answered " + status + " to " + response.uri();
         });
   }
 
-  /** Where a Link or Location header points, if it is on the API's origin. */
+  /** Where a Link or Location header points, if the token may go there. */
   private URI follow(URI base, String reference) throws IOException {
     URI uri;
     try {
@@ -221,22 +242,22 @@ public final class GitHubSource implements Source {
           ? URI.create(base.toString().replaceFirst("[?#].*", "") + reference)
           : base.resolve(reference);
     } catch (IllegalArgumentException e) {
-      throw new IOException("GitHub pointed to an invalid address: " + reference, e);
+      throw new IOException(service + " pointed to an invalid address: " + reference, e);
     }
     return sameOrigin(uri);
   }
 
-  /** The address, if it is on the API's origin: the token must not reach any other. */
+  /** The address, if the token may go there: it must not reach any other. */
   private URI sameOrigin(URI uri) throws IOException {
     if (!onApi(uri)) {
-      throw new IOException("GitHub pointed to " + uri + ", outside " + api);
+      throw new IOException(service + " pointed to " + uri + ", outside " + api);
     }
     return uri;
   }
 
   /**
    * The Authorization header for a request to {@code uri}, or {@code null} if there is no token
-   * or the address is not on the API's origin.
+   * or the address is not on the API's origin, or not below the instance's path.
    */
   String authorization(URI uri) {
     return token != null && onApi(uri) ? "Bearer " + token : null;
@@ -245,7 +266,23 @@ public final class GitHubSource implements Source {
   private boolean onApi(URI uri) {
     return api.getScheme().equalsIgnoreCase(String.valueOf(uri.getScheme()))
         && api.getHost().equalsIgnoreCase(String.valueOf(uri.getHost()))
-        && port(api) == port(uri);
+        && port(api) == port(uri)
+        // As sent and with dot segments resolved: another app on the same host must not get it.
+        && uri.getRawPath().startsWith(scope)
+        && uri.normalize().getRawPath().startsWith(scope)
+        && (github || !escapedSeparator(uri.getRawPath()));
+  }
+
+  /**
+   * Whether the path escapes a dot, slash or backslash, which a proxy may decode into a step up, or
+   * a percent sign, which may escape one of them once more.
+   */
+  private static boolean escapedSeparator(String path) {
+    String lower = path.toLowerCase(Locale.ROOT);
+    return lower.contains("%2e")
+        || lower.contains("%2f")
+        || lower.contains("%5c")
+        || lower.contains("%25");
   }
 
   /** Whether the host is this machine: {@code localhost} or a loopback IP address, never a name. */
@@ -286,8 +323,8 @@ public final class GitHubSource implements Source {
       long id = a.path("id").asLong(0);
       assets.add(new Asset(
           text(a, "name"),
-          // The API serves the files of a private repository as well, and only with the token.
-          token != null && id > 0
+          // GitHub's API serves the files of a private repository as well, and only with the token.
+          github && token != null && id > 0
               ? api.resolve("repos/" + repository + "/releases/assets/" + id)
               : uri(a, "browser_download_url"),
           a.path("size").asLong(0),
@@ -305,7 +342,8 @@ public final class GitHubSource implements Source {
           uri(node, "html_url"),
           assets));
     } catch (DateTimeParseException e) {
-      throw new IOException("GitHub sent release " + tag + " without a valid publication date", e);
+      throw new IOException(
+          service + " sent release " + tag + " without a valid publication date", e);
     }
   }
 
@@ -325,7 +363,7 @@ public final class GitHubSource implements Source {
   }
 
   /** The field as an absolute HTTP(S) address. */
-  private static URI uri(JsonNode node, String field) throws IOException {
+  private URI uri(JsonNode node, String field) throws IOException {
     String text = text(node, field);
     try {
       URI uri = new URI(text);
@@ -336,6 +374,6 @@ public final class GitHubSource implements Source {
     } catch (URISyntaxException _) {
       // reported below
     }
-    throw new IOException("GitHub sent no valid " + field + ": \"" + text + "\"");
+    throw new IOException(service + " sent no valid " + field + ": \"" + text + "\"");
   }
 }

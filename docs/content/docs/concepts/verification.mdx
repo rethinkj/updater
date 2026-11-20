@@ -14,10 +14,10 @@ If a release has both and they disagree, nothing is downloaded. Only a file that
 
 - **Progress:** `progress` is told how many bytes have arrived, each time more do. `Asset.size()` is the total.
 - **Cancelling:** interrupt the thread that runs the download, for instance with `Future.cancel(true)`. The call throws an `InterruptedIOException` and leaves no file behind. A download that sends nothing for 30 seconds fails as well.
-- **Private repositories:** `new Downloader(source)`, given a `GitHubSource` with a token, downloads the files of a private repository through GitHub's API. The token goes only to the API, never to where the API redirects, such as GitHub's CDN. `new Downloader()` sends no token. If the repository was renamed, give the source its new name: the API redirects the old one, and the redirect gets no token.
+- **Private repositories:** `new Downloader(source)`, given a `GitHubSource` with a token, downloads the files of a private repository through GitHub's API. The token goes only to the API, never to where the API redirects, such as GitHub's CDN. `new Downloader()` sends no token. If the repository was renamed, give the source its new name: the API redirects the old one, and the redirect gets no token. Given a `GiteaSource` with a token, it downloads the files from the instance with the token, and from where the instance redirects, such as to object storage, without it.
 - **Transport:** files are downloaded over https only, or from this machine. Redirects are followed from https to https only. A download from this machine follows none, except the API's one redirect, with a token, to this machine. A checksum file whose own checksum the source reports must match it before its entries are used.
 
-The checksum protects against broken and altered downloads, as long as it comes from a place the download does not: GitHub reports it through its API.
+The checksum protects against broken and altered downloads, as long as it comes from a place the download does not: GitHub reports it through its API. Gitea and Forgejo report none, so there the checksum file comes from the same instance as the file: it catches a broken download, not one the instance alters.
 
 ## Not implemented yet
 
