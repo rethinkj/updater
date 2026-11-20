@@ -1,0 +1,1 @@
+- `Downloader` also finds a file's checksum in a file of the same release named after it with `.sha256` appended, such as `app.zip.sha256`, holding the line `sha256sum` writes for it or the checksum alone. If that file and a checksum file such as `SHA256SUMS` disagree, the file is not downloaded.

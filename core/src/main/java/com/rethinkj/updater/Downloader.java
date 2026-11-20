@@ -32,10 +32,12 @@ import java.util.regex.Pattern;
 /**
  * Downloads the files of a release and hands on only those that match their SHA-256 checksum.
  *
- * <p>The checksum is the one the source reports ({@link Asset#sha256()}), or else the one a
- * checksum file attached to the same release lists: {@code SHA256SUMS}, {@code SHA256SUMS.txt} or a
- * file whose name ends in {@code checksums.txt}, with lines of the form {@code <hex>  <file name>}.
- * A file whose checksum is not known is not downloaded.
+ * <p>The checksum is the one the source reports ({@link Asset#sha256()}), or else the one the
+ * checksum files attached to the same release list: a file for all of them, {@code SHA256SUMS},
+ * {@code SHA256SUMS.txt} or one whose name ends in {@code checksums.txt}, with lines of the form
+ * {@code <hex>  <file name>}; or the file's own {@code <file name>.sha256}, with that line or the
+ * checksum alone. If both list one, they must agree. A file whose checksum is not known, or whose
+ * checksum files disagree, is not downloaded.
  *
  * <p>Files are downloaded from {@link Asset#url()}, over https or from this machine. A downloader
  * given a {@link GitHubSource} with a token sends the token with requests to its API, never to
@@ -50,8 +52,9 @@ public final class Downloader {
   private static final long MAX_CHECKSUM_FILE = 1 << 20;
   private static final Pattern CHECKSUM_FILE =
       Pattern.compile("(?i)sha256sums(?:\\.txt)?|.*checksums\\.txt");
-  // As sha256sum writes it: the checksum, a space, and a space or "*" before the file name.
-  private static final Pattern CHECKSUM_LINE = Pattern.compile("([0-9a-fA-F]{64}) [ *](.+)");
+  // As sha256sum writes it: the checksum, a space, and a space or "*" before the file name; or
+  // the checksum alone.
+  private static final Pattern CHECKSUM_LINE = Pattern.compile("([0-9a-fA-F]{64})(?: [ *](.+))?");
 
   // Redirects go only from https to https; one from this machine could lead anywhere over http,
   // and one from a request with a token would take the token along.
@@ -111,31 +114,55 @@ public final class Downloader {
     }
   }
 
-  /** The checksum the source reports, or the one in a checksum file of the release. */
+  /**
+   * The checksum the source reports, or else the one the first checksum file of the release that
+   * lists the asset has, and the asset's own {@code <name>.sha256}: if both have one, they agree.
+   */
   private String checksum(Release release, Asset asset) throws IOException {
     if (!asset.sha256().isEmpty()) {
       return asset.sha256();
     }
+    String shared = null;
+    String own = null;
     for (Asset sums : release.assets()) {
-      if (sums.equals(asset) || !CHECKSUM_FILE.matcher(sums.name()).matches()) {
-        continue;
-      }
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      copy(sums, out, MAX_CHECKSUM_FILE, n -> {});
-      String reported = sums.sha256();
-      if (!reported.isEmpty() && !reported.equals(sha256(out.toByteArray()))) {
-        throw new IOException(
-            sums.name() + " of " + release.tag() + " does not match its checksum");
-      }
-      for (String line : out.toString(StandardCharsets.UTF_8).lines().toList()) {
-        Matcher m = CHECKSUM_LINE.matcher(line.strip());
-        if (m.matches() && m.group(2).equals(asset.name())) {
-          return m.group(1).toLowerCase(Locale.ROOT);
-        }
+      if (sums.name().equals(asset.name() + ".sha256")) {
+        own = listed(release, sums, asset, true);
+      } else if (shared == null
+          && !sums.equals(asset)
+          && CHECKSUM_FILE.matcher(sums.name()).matches()) {
+        shared = listed(release, sums, asset, false);
       }
     }
-    throw new IOException("No SHA-256 checksum is known for " + asset.name() + " of "
-        + release.tag() + ", so it is not downloaded");
+    if (shared != null && own != null && !shared.equals(own)) {
+      throw new IOException("The checksum files of " + release.tag() + " disagree on "
+          + asset.name() + ", so it is not downloaded");
+    }
+    if (shared == null && own == null) {
+      throw new IOException("No SHA-256 checksum is known for " + asset.name() + " of "
+          + release.tag() + ", so it is not downloaded");
+    }
+    return shared != null ? shared : own;
+  }
+
+  /**
+   * The checksum {@code sums} lists for {@code asset}, or {@code null}. A checksum without a file
+   * name counts only in the asset's {@code own} file, where it can mean no other.
+   */
+  private String listed(Release release, Asset sums, Asset asset, boolean own) throws IOException {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    copy(sums, out, MAX_CHECKSUM_FILE, n -> {});
+    String reported = sums.sha256();
+    if (!reported.isEmpty()
+        && !reported.equals(HexFormat.of().formatHex(newDigest().digest(out.toByteArray())))) {
+      throw new IOException(sums.name() + " of " + release.tag() + " does not match its checksum");
+    }
+    for (String line : out.toString(StandardCharsets.UTF_8).lines().toList()) {
+      Matcher m = CHECKSUM_LINE.matcher(line.strip());
+      if (m.matches() && (m.group(2) == null ? own : m.group(2).equals(asset.name()))) {
+        return m.group(1).toLowerCase(Locale.ROOT);
+      }
+    }
+    return null;
   }
 
   private void copy(Asset asset, OutputStream out, long max, LongConsumer progress)
@@ -236,10 +263,6 @@ public final class Downloader {
         .connectTimeout(TIMEOUT)
         .followRedirects(redirect)
         .build();
-  }
-
-  private static String sha256(byte[] bytes) {
-    return HexFormat.of().formatHex(newDigest().digest(bytes));
   }
 
   private static MessageDigest newDigest() {
