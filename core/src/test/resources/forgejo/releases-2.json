@@ -1,0 +1,35 @@
+[
+  {
+    "id": 998342,
+    "tag_name": "v1.18.0-rc1",
+    "target_commitish": "",
+    "name": "v1.18.0-rc1",
+    "body": "",
+    "url": "https://codeberg.org/api/v1/repos/forgejo/forgejo/releases/998342",
+    "html_url": "https://codeberg.org/forgejo/forgejo/releases/tag/v1.18.0-rc1",
+    "tarball_url": "https://codeberg.org/forgejo/forgejo/archive/v1.18.0-rc1.tar.gz",
+    "zipball_url": "https://codeberg.org/forgejo/forgejo/archive/v1.18.0-rc1.zip",
+    "hide_archive_links": false,
+    "upload_url": "https://codeberg.org/api/v1/repos/forgejo/forgejo/releases/998342/assets",
+    "draft": false,
+    "prerelease": true,
+    "created_at": "2022-11-25T09:02:43+01:00",
+    "published_at": "2022-11-25T09:02:43+01:00",
+    "assets": [
+      {
+        "id": 24510,
+        "name": "forgejo-1.18.0-rc1-linux-amd64.sha256",
+        "size": 97,
+        "download_count": 76,
+        "created_at": "2022-11-25T09:45:12+01:00",
+        "uuid": "9dae74cc-42d8-40d6-839a-a39a2ab69036",
+        "browser_download_url": "https://codeberg.org/forgejo/forgejo/releases/download/v1.18.0-rc1/forgejo-1.18.0-rc1-linux-amd64.sha256",
+        "type": "attachment"
+      }
+    ],
+    "archive_download_count": {
+      "zip": 8,
+      "tar_gz": 9
+    }
+  }
+]
