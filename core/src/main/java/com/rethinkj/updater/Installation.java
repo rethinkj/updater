@@ -136,9 +136,10 @@ public final class Installation {
    * Empty if there is none, or while a helper is still at work.
    *
    * <p>If the helper was ended before it reported, as when the user logged off while it waited for
-   * the new version to confirm, this reports in its place: {@link Result.Status#APPLIED} if the new
-   * version is in place, which runs, and then it deletes the old version beside it; else {@link
-   * Result.Status#REJECTED} with the reason {@code failed}, and the old version stays where it is.
+   * the new version to confirm, this reports in its place: {@link Result.Status#APPLIED} if the
+   * helper named the old version and it is still beside the app's folder, which then holds the new
+   * one, and then it deletes the old version; else {@link Result.Status#REJECTED} with the reason
+   * {@code failed}, even if the new version is in place, and what is beside the app stays there.
    *
    * <p>Unless a helper is at work, it also deletes the copies of the helper in the update folder.
    * One that Windows still holds open, as the helper exits, is deleted at a later call. What the
