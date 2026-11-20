@@ -111,7 +111,7 @@ public record Section(Kind kind, String heading, List<String> entries) {
     void read(String line) {
       if (fence != null) {
         continueWith(line); // a code block is kept as written
-        if (line.strip().startsWith(fence)) {
+        if (closesFence(line.strip())) {
           fence = null;
         }
         return;
@@ -126,13 +126,23 @@ public record Section(Kind kind, String heading, List<String> entries) {
         add(current == null ? untitled() : current.entries(), item.group(1), item.start(1));
       } else if (open != null) {
         continueWith(line);
+        openFence(line);
       } else {
         addParagraph(line.stripLeading());
       }
-      Matcher opens = FENCE.matcher(line);
+    }
+
+    /** Starts a code block if {@code text}, a line or an item's text, opens one. */
+    private void openFence(String text) {
+      Matcher opens = FENCE.matcher(text);
       if (opens.matches()) {
         fence = opens.group(1);
       }
+    }
+
+    /** Whether {@code text} closes the code block: only its fence's character, as many or more. */
+    private boolean closesFence(String text) {
+      return text.length() >= fence.length() && text.chars().allMatch(c -> c == fence.charAt(0));
     }
 
     private void startSection(int level, String heading) {
@@ -173,6 +183,7 @@ public record Section(Kind kind, String heading, List<String> entries) {
       open = entries;
       this.indent = indent;
       open.add(text);
+      openFence(text);
     }
 
     private void continueWith(String line) {

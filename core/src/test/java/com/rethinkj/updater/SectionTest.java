@@ -110,7 +110,13 @@ class SectionTest {
         app --version
 
         - not a list item
+        ```text
+        # not a heading
         ```
+
+        - ```sh
+          # an item can be code
+          ```
         """;
 
     assertEquals(
@@ -120,7 +126,8 @@ class SectionTest {
             List.of(
                 "Starts faster\nand downloads less.",
                 "Check the version with:",
-                "```sh\n# prints 2.0.0\napp --version\n\n- not a list item\n```"))),
+                "```sh\n# prints 2.0.0\napp --version\n\n- not a list item\n```text\n# not a heading\n```",
+                "```sh\n# an item can be code\n```"))),
         Section.parse(notes));
   }
 }
