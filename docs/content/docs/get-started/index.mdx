@@ -3,7 +3,7 @@ title: Installation
 description: How to add rethinkj Updater to a Maven project.
 ---
 
-rethinkj Updater needs JDK 25 and runs on Windows 11 and later and on Linux, both on x64. So far it only checks for updates and downloads them. There is no release yet: SNAPSHOTs are published from `main` to Maven Central's snapshot repository. A SNAPSHOT changes with each push, the API with it, and Central removes SNAPSHOTs after 90 days.
+rethinkj Updater needs JDK 25 and runs on Windows 11 and later and on Linux, both on x64. There is no release yet: SNAPSHOTs are published from `main` to Maven Central's snapshot repository. A SNAPSHOT changes with each push, the API with it, and Central removes SNAPSHOTs after 90 days.
 
 ## Depend on it
 
@@ -30,4 +30,4 @@ It comes with a sources and a Javadoc JAR, which IDEs pick up. To build it yours
 
 `rethinkj-updater-helper` is the separate process that applies an update. An app that applies updates depends on it as well, with the same version, so that it ships on the class path; see [Applying updates](/docs/concepts/applying-updates).
 
-Next, [check for updates](/docs/get-started/check-for-updates) in a small app.
+Next, [check for updates](/docs/get-started/check-for-updates) in a small app, and [package the app](/docs/get-started/package-the-app) so that it can be updated.
