@@ -57,7 +57,7 @@ A plan without a result, while no helper holds `helper.lock`, means that the hel
 | Key | Value |
 | --- | --- |
 | `format` | `1` |
-| `status` | `applied`; `rolled-back` if the old version is back in place; `rejected` if nothing changed. One exception: if the helper cannot rename the old version back, the app's folder is missing or holds the new version that did not confirm, and it writes `rejected` with the reason `failed` and a message that names the folder holding the old version. |
+| `status` | `applied`; `rolled-back` if the old version is back in place; `rejected` if nothing changed. One exception: if the helper cannot rename the old version back, the app's folder is missing or holds the new version that did not confirm, and it writes `rejected` with the reason `failed` and a message that names the folder holding the old version. core also reports `rejected` with the reason `failed` for a helper that was ended before it reported, when it cannot tell which version is in place; see [Backup](#backup). |
 | `reason` | With `rolled-back` or `rejected`: one of the codes below. |
 | `message` | A sentence in English for a log, not for parsing. |
 
