@@ -186,8 +186,8 @@ public final class Downloader {
     URI target;
     try {
       target = uri.resolve(location);
-    } catch (IllegalArgumentException e) {
-      throw new IOException(uri + " redirects to an invalid address", e);
+    } catch (IllegalArgumentException _) { // whose message would show the address
+      throw new IOException(uri + " redirects to an invalid address");
     }
     // Messages name only uri: the target may be an address signed for this one download.
     if (!allowed(uri, target)) {

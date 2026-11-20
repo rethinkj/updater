@@ -68,8 +68,8 @@ public final class GitHubSource implements Source {
    * @param api the REST API, {@code https://api.github.com/} or {@code https://<host>/api/v3/}
    * @param repository owner and name, such as {@code rethinkj/updater}
    * @param token a token that may read the repository's releases, or {@code null} for none
-   * @throws IllegalArgumentException if {@code repository} is not owner/name, or {@code api} is
-   *     neither https nor on this machine
+   * @throws IllegalArgumentException if {@code repository} is not owner/name, {@code api} is
+   *     neither https nor on this machine, or {@code token} has characters other than visible ASCII
    */
   public GitHubSource(URI api, String repository, String token) {
     if (!OWNER_NAME.matcher(repository).matches()) {
@@ -79,6 +79,10 @@ public final class GitHubSource implements Source {
     this.api = URI.create(base.endsWith("/") ? base : base + "/");
     this.repository = repository;
     this.token = token == null || token.isBlank() ? null : token.strip();
+    // The HTTP client would refuse such a header and name its value, the token, in the exception.
+    if (this.token != null && !this.token.chars().allMatch(c -> c > ' ' && c < 0x7f)) {
+      throw new IllegalArgumentException("The token has characters other than visible ASCII");
+    }
     // Over plain http anyone on the way could swap a release's addresses and checksums.
     if (!HTTPS.equalsIgnoreCase(this.api.getScheme())
         && !("http".equalsIgnoreCase(this.api.getScheme()) && loopback(this.api))) {

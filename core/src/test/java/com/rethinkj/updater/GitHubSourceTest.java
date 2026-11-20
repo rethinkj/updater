@@ -162,6 +162,14 @@ class GitHubSourceTest {
   }
 
   @Test
+  void refusesATokenItCouldNotSendWithoutShowingIt() {
+    // Such as a token read from a file saved with a byte order mark.
+    IllegalArgumentException e = assertThrows(
+        IllegalArgumentException.class, () -> new GitHubSource(api, "a/b", "\uFEFFtest-token"));
+    assertFalse(e.getMessage().contains("test-token"), e.getMessage());
+  }
+
+  @Test
   void followsNoLinkToAnotherHostOrBack() {
     IOException e = assertThrows(
         IOException.class, () -> new GitHubSource(api, "elsewhere/app", "test-token").releases());
