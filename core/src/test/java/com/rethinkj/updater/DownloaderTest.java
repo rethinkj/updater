@@ -124,12 +124,14 @@ class DownloaderTest {
     Asset unknown = asset("app.zip", "");
     Asset wrong = asset("app.zip", "1".repeat(64));
     Asset plain = new Asset("app.zip", URI.create("http://example.com/app.zip"), 1, sha256(APP));
+    Asset hostless = new Asset("app.zip", URI.create("https:/app.zip"), 1, sha256(APP));
     Asset away = asset("away.zip", sha256(APP));
     Asset alteredSums = asset("SHA256SUMS", "2".repeat(64)); // the source says otherwise
     for (Release r : List.of(
         release(wrong),
         release(unknown),
         release(plain),
+        release(hostless),
         release(away),
         release(unknown, alteredSums))) {
       Asset a = r.assets().getFirst();

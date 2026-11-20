@@ -198,7 +198,13 @@ public final class Downloader {
 
   private HttpResponse<Flow.Publisher<List<ByteBuffer>>> send(
       URI uri, URI target, String authorization) throws IOException {
-    HttpRequest.Builder request = HttpRequest.newBuilder(target)
+    HttpRequest.Builder request;
+    try {
+      request = HttpRequest.newBuilder(target);
+    } catch (IllegalArgumentException _) { // whose message would show the address
+      throw new IOException("Downloading " + uri + " leads to an address without a host");
+    }
+    request
         .timeout(TIMEOUT)
         .header("User-Agent", "rethinkj-updater")
         // What GitHub's API needs to send the file rather than its description.
