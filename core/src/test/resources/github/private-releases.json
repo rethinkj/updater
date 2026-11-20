@@ -26,6 +26,15 @@
         "size": 151,
         "digest": null,
         "browser_download_url": "https://github.com/owner/app/releases/download/v1.1.0/SHA256SUMS"
+      },
+      {
+        "url": "https://api.github.com/repos/owner/app/releases/assets/13",
+        "id": 13,
+        "name": "app.zip.sha256",
+        "content_type": "text/plain",
+        "size": 74,
+        "digest": null,
+        "browser_download_url": "https://github.com/owner/app/releases/download/v1.1.0/app.zip.sha256"
       }
     ],
     "body": ""

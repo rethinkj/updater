@@ -19,6 +19,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.regex.Pattern;
@@ -38,7 +40,8 @@ class DownloaderTest {
   private HttpServer server;
   private String base;
   private final CountDownLatch release = new CountDownLatch(1);
-  private final List<String> tokens = new CopyOnWriteArrayList<>(); // as /app.zip received them
+  // As /app.zip and /own/ received them.
+  private final List<String> tokens = new CopyOnWriteArrayList<>();
 
   @BeforeEach
   void start() throws Exception {
@@ -52,6 +55,22 @@ class DownloaderTest {
     });
     server.createContext("/SHA256SUMS", exchange -> {
       byte[] body = ("0".repeat(64) + "  other.zip\r\n" + sha256(APP) + " *app.zip\n").getBytes();
+      exchange.sendResponseHeaders(200, body.length);
+      exchange.getResponseBody().write(body);
+      exchange.close();
+    });
+    // Checksum files for app.zip alone, each on its own path: a context answers every path it
+    // begins, so /app.zip would answer /app.zip.sha256.
+    Map<String, String> own = Map.of(
+        "/own/app.zip.sha256", sha256(APP).toUpperCase(Locale.ROOT) + " *app.zip\n",
+        "/own/bare.sha256", sha256(APP) + "\n",
+        "/own/other.sha256", sha256(APP) + "  other.zip\n",
+        "/own/mixed.sha256", sha256(APP) + "\n" + sha256(APP) + "  other.zip\n",
+        "/own/broken.sha256", sha256(APP).substring(1) + "  app.zip\n",
+        "/own/wrong.sha256", "1".repeat(64) + "  app.zip\n");
+    server.createContext("/own/", exchange -> {
+      tokens.add(String.valueOf(exchange.getRequestHeaders().getFirst("Authorization")));
+      byte[] body = own.get(exchange.getRequestURI().getPath()).getBytes(StandardCharsets.UTF_8);
       exchange.sendResponseHeaders(200, body.length);
       exchange.getResponseBody().write(body);
       exchange.close();
@@ -118,6 +137,30 @@ class DownloaderTest {
   }
 
   @Test
+  void verifiesWithTheChecksumFileOfTheAssetIfItFits() throws IOException {
+    Downloader downloader = new Downloader();
+    Asset app = asset("app.zip", "");
+    // As sha256sum writes it, or the checksum alone.
+    for (String path : List.of("app.zip.sha256", "bare.sha256")) {
+      Release r = release(app, file("app.zip.sha256", path));
+      assertEquals(sha256(APP), downloader.download(r, app, folder, n -> {}).sha256());
+    }
+    String unknown = "No SHA-256 checksum is known";
+    Map<Release, String> refused = Map.of(
+        release(app, file("app.zip.sha256", "other.sha256")), unknown, // names another file
+        release(app, file("app.zip.sha256", "broken.sha256")), unknown, // not a SHA-256 checksum
+        release(app, file("app.zip.sha256", "mixed.sha256")), unknown, // alone only if alone
+        release(app, file("SHA256SUMS", "bare.sha256")), unknown, // would vouch for every file
+        release(app, file("app.zip.sha256", "wrong.sha256"), asset("SHA256SUMS", "")), "disagree");
+    refused.forEach((r, expected) -> {
+      IOException e =
+          assertThrows(IOException.class, () -> downloader.download(r, app, folder, n -> {}));
+      assertTrue(e.getMessage().contains(expected), e.getMessage());
+    });
+    assertEquals(2, files().size()); // the two verified downloads, and nothing of the others
+  }
+
+  @Test
   void handsOnNothingWithoutAMatchingChecksum() {
     Downloader downloader = new Downloader();
     Asset app = asset("app.zip", sha256(APP));
@@ -180,7 +223,12 @@ class DownloaderTest {
           exchange.getResponseBody().write(body);
         }
       } else if ("application/octet-stream".equals(headers.getFirst("Accept"))) {
-        String file = path.endsWith("/assets/11") ? "app.zip" : "SHA256SUMS";
+        String file = switch (path.substring(path.lastIndexOf('/') + 1)) {
+          case "11" -> "app.zip";
+          case "12" -> "SHA256SUMS";
+          case "13" -> "own/app.zip.sha256";
+          default -> "unknown";
+        };
         exchange.getResponseHeaders().add("Location", cdn + file);
         exchange.sendResponseHeaders(302, -1);
       } else {
@@ -193,13 +241,13 @@ class DownloaderTest {
     Asset app = latest.asset(Pattern.compile("app\\.zip")).orElseThrow();
     Downloader downloader = new Downloader(source);
 
-    // Verified with the release's checksum file, which comes through the API as well.
+    // Verified with the release's checksum files, which come through the API as well.
     Path file = downloader.download(latest, app, folder, n -> {}).file();
     assertArrayEquals(APP, Files.readAllBytes(file));
     // A file on another host gets no token either.
     Asset elsewhere = new Asset("app.zip", URI.create(cdn + "app.zip"), 0, sha256(APP));
     downloader.download(release(elsewhere), elsewhere, folder, n -> {});
-    assertEquals(List.of("null", "null"), tokens);
+    assertEquals(List.of("null", "null", "null"), tokens); // app.zip.sha256 and app.zip twice
   }
 
   private List<Path> files() {
@@ -223,6 +271,11 @@ class DownloaderTest {
 
   private Asset asset(String name, String sha256) {
     return new Asset(name, URI.create(base + name), 0, sha256);
+  }
+
+  /** A checksum file named {@code name}, with the content of {@code path} under /own/. */
+  private Asset file(String name, String path) {
+    return new Asset(name, URI.create(base + "own/" + path), 0, "");
   }
 
   private static Release release(Asset... assets) {
