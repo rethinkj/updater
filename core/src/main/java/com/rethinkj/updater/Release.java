@@ -56,4 +56,18 @@ public record Release(
     }
     return matches.stream().findFirst();
   }
+
+  /**
+   * The notes split at their Markdown headings, in the order of the notes. A section's entries are
+   * its list items and its paragraphs. A heading of no known kind under one of a known kind, such
+   * as {@code Configuration} under {@code Breaking Changes}, has that kind. Text before the first
+   * heading, and GitHub's {@code **Full Changelog**} link, form sections with an empty heading. A
+   * heading of no known kind with nothing under it but deeper headings, such as GitHub's {@code
+   * What's Changed} or the version above the sections of Keep a Changelog, makes no section; any
+   * other heading makes one, even with nothing under it. Notes without headings are one section of
+   * kind {@link Section.Kind#OTHER}.
+   */
+  public List<Section> sections() {
+    return Section.parse(notes);
+  }
 }

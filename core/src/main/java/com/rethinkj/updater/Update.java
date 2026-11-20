@@ -2,8 +2,11 @@ package com.rethinkj.updater;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * A newer version than the installed one, and every release on the way to it.
@@ -54,5 +57,31 @@ public record Update(Version installed, List<Release> releases) {
   /** The newest release, the one to update to. */
   public Release latest() {
     return releases.getFirst();
+  }
+
+  /**
+   * The {@linkplain Release#sections() sections} of every release, merged: one section of each
+   * kind, and of kind {@link Section.Kind#OTHER} one for each heading, sorted by kind, so that
+   * breaking changes come first. A merged section has the entries of newer releases first, and the
+   * heading of the newest release that has it, such as {@code Features} where an older release
+   * wrote {@code Added}.
+   */
+  public List<Section> sections() {
+    record Key(Section.Kind kind, String heading) {}
+    Map<Key, Section> merged = new LinkedHashMap<>();
+    for (Release release : releases) {
+      for (Section s : release.sections()) {
+        Key key = new Key(s.kind(), s.kind() == Section.Kind.OTHER ? s.heading() : "");
+        merged.merge(
+            key,
+            s,
+            (newer, older) -> new Section(
+                newer.kind(),
+                newer.heading(),
+                Stream.concat(newer.entries().stream(), older.entries().stream())
+                    .toList()));
+      }
+    }
+    return merged.values().stream().sorted(Comparator.comparing(Section::kind)).toList();
   }
 }
