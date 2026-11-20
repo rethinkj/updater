@@ -1,0 +1,33 @@
+[
+  {
+    "url": "https://api.github.com/repos/owner/app/releases/1",
+    "html_url": "https://github.com/owner/app/releases/tag/v1.1.0",
+    "id": 1,
+    "tag_name": "v1.1.0",
+    "name": "1.1.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-11-19T12:00:00Z",
+    "assets": [
+      {
+        "url": "https://api.github.com/repos/owner/app/releases/assets/11",
+        "id": 11,
+        "name": "app.zip",
+        "content_type": "application/zip",
+        "size": 22,
+        "digest": null,
+        "browser_download_url": "https://github.com/owner/app/releases/download/v1.1.0/app.zip"
+      },
+      {
+        "url": "https://api.github.com/repos/owner/app/releases/assets/12",
+        "id": 12,
+        "name": "SHA256SUMS",
+        "content_type": "text/plain",
+        "size": 151,
+        "digest": null,
+        "browser_download_url": "https://github.com/owner/app/releases/download/v1.1.0/SHA256SUMS"
+      }
+    ],
+    "body": ""
+  }
+]

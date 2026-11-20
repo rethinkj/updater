@@ -33,7 +33,8 @@ class GitHubSourceTest {
     // as only a query.
     server.createContext("/api/v3/repos/cli/cli/releases", exchange -> {
       String page = exchange.getRequestURI().getQuery().contains("page=2") ? "2" : "1";
-      authorization.put(page, exchange.getRequestHeaders().getFirst("Authorization"));
+      authorization.put(
+          page, String.valueOf(exchange.getRequestHeaders().getFirst("Authorization")));
       if (page.equals("1")) {
         String pages = api + "/repos/cli/cli/releases?per_page=100&page=";
         exchange.getResponseHeaders().add("Link", "<" + pages + "9>; rel=\"last\"");
@@ -111,6 +112,7 @@ class GitHubSourceTest {
     assertFalse(newest.preRelease());
     Asset checksums = newest.assets().getFirst();
     assertEquals("gh_2.104.0_checksums.txt", checksums.name());
+    assertEquals(URI.create(api + "/repos/cli/cli/releases/assets/740718806"), checksums.url());
     assertEquals(1971, checksums.size());
     assertEquals(
         "180df77fb931591d5d65e33f02a76c9ade314d1c335569af73cc6c8fcb365d2c", checksums.sha256());
@@ -120,6 +122,16 @@ class GitHubSourceTest {
     assertEquals("v2.103.0-rc.1", candidate.title()); // no name: the tag
     assertEquals("", candidate.notes());
     assertEquals("", candidate.assets().getFirst().sha256()); // no digest reported
+
+    // Without a token, files are downloaded from where a browser would.
+    assertEquals(
+        "https://github.com/cli/cli/releases/download/v2.104.0/gh_2.104.0_checksums.txt",
+        new GitHubSource(api, "cli/cli", null)
+                .releases()
+                .getFirst()
+                .assets()
+                .getFirst()
+                .url() + "");
   }
 
   @Test
@@ -147,6 +159,14 @@ class GitHubSourceTest {
         List.of("http://LOCALHOST:8080/", "http://127.0.0.2/", "http://[0:0:0:0:0:0:0:1]/")) {
       new GitHubSource(URI.create(address), "a/b", "test-token");
     }
+  }
+
+  @Test
+  void refusesATokenItCouldNotSendWithoutShowingIt() {
+    // Such as a token read from a file saved with a byte order mark.
+    IllegalArgumentException e = assertThrows(
+        IllegalArgumentException.class, () -> new GitHubSource(api, "a/b", "\uFEFFtest-token"));
+    assertFalse(e.getMessage().contains("test-token"), e.getMessage());
   }
 
   @Test

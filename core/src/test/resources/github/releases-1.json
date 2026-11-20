@@ -9,6 +9,8 @@
     "html_url": "https://github.com/cli/cli/releases/tag/v2.104.0",
     "assets": [
       {
+        "url": "https://api.github.com/repos/cli/cli/releases/assets/740718806",
+        "id": 740718806,
         "name": "gh_2.104.0_checksums.txt",
         "size": 1971,
         "digest": "sha256:180df77fb931591d5d65e33f02a76c9ade314d1c335569af73cc6c8fcb365d2c",
@@ -16,6 +18,8 @@
         "browser_download_url": "https://github.com/cli/cli/releases/download/v2.104.0/gh_2.104.0_checksums.txt"
       },
       {
+        "url": "https://api.github.com/repos/cli/cli/releases/assets/740718807",
+        "id": 740718807,
         "name": "gh_2.104.0_linux_386.deb",
         "size": 14127242,
         "digest": "sha256:d3b90c66a71249ef1ff38450d1644708071d091388804411cd45ce66de2c5ed6",
@@ -34,6 +38,8 @@
     "html_url": "https://github.com/cli/cli/releases/tag/v2.103.3",
     "assets": [
       {
+        "url": "https://api.github.com/repos/cli/cli/releases/assets/679195516",
+        "id": 679195516,
         "name": "gh_2.103.3_checksums.txt",
         "size": 1971,
         "digest": "sha256:f756e7859d90dbb5e85aae5194206c37da220bec9bac23d3d659078a8e766fdc",
@@ -41,6 +47,8 @@
         "browser_download_url": "https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_checksums.txt"
       },
       {
+        "url": "https://api.github.com/repos/cli/cli/releases/assets/679195511",
+        "id": 679195511,
         "name": "gh_2.103.3_linux_386.deb",
         "size": 14148728,
         "digest": "sha256:5b3b310d80e6bdb144d256b4c3794f01eac0cf3f6df44e893e5c85573f1138e5",

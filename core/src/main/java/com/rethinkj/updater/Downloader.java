@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Flow;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -36,10 +37,12 @@ import java.util.regex.Pattern;
  * file whose name ends in {@code checksums.txt}, with lines of the form {@code <hex>  <file name>}.
  * A file whose checksum is not known is not downloaded.
  *
- * <p>Files are downloaded without credentials from {@link Asset#url()}, so the files of a private
- * GitHub repository cannot be downloaded yet. They are downloaded over https, or from this machine. To cancel a download, interrupt the
- * thread that runs it, for instance with {@link java.util.concurrent.Future#cancel(boolean)
- * Future.cancel(true)}. A download that sends nothing for 30 seconds fails.
+ * <p>Files are downloaded from {@link Asset#url()}, over https or from this machine. A downloader
+ * given a {@link GitHubSource} with a token sends the token with requests to its API, never to
+ * where the API redirects, so that it downloads the files of a private repository too. To cancel
+ * a download, interrupt the thread that runs it, for instance with {@link
+ * java.util.concurrent.Future#cancel(boolean) Future.cancel(true)}. A download that sends nothing
+ * for 30 seconds fails.
  */
 public final class Downloader {
 
@@ -50,9 +53,24 @@ public final class Downloader {
   // As sha256sum writes it: the checksum, a space, and a space or "*" before the file name.
   private static final Pattern CHECKSUM_LINE = Pattern.compile("([0-9a-fA-F]{64}) [ *](.+)");
 
-  // Redirects go only from https to https; one from this machine could lead anywhere over http.
+  // Redirects go only from https to https; one from this machine could lead anywhere over http,
+  // and one from a request with a token would take the token along.
   private final HttpClient https = client(HttpClient.Redirect.NORMAL);
   private final HttpClient local = client(HttpClient.Redirect.NEVER);
+  private final Source source;
+
+  /** A downloader that sends no credentials, for the files of a public repository. */
+  public Downloader() {
+    source = null;
+  }
+
+  /**
+   * A downloader for the releases of {@code source}, with its credentials: given a {@link
+   * GitHubSource} with a token, it downloads the files of a private repository through the API.
+   */
+  public Downloader(Source source) {
+    this.source = Objects.requireNonNull(source, "source");
+  }
 
   /**
    * Downloads {@code asset} of {@code release} into a new file in {@code folder} and verifies it.
@@ -123,21 +141,7 @@ public final class Downloader {
   private void copy(Asset asset, OutputStream out, long max, LongConsumer progress)
       throws IOException {
     URI uri = asset.url();
-    boolean secure = "https".equalsIgnoreCase(uri.getScheme());
-    if (!secure && !("http".equalsIgnoreCase(uri.getScheme()) && GitHubSource.loopback(uri))) {
-      throw new IOException("Files are downloaded only over https, not from " + uri);
-    }
-    HttpRequest request = HttpRequest.newBuilder(uri)
-        .timeout(TIMEOUT)
-        .header("User-Agent", "rethinkj-updater")
-        .build();
-    HttpResponse<Flow.Publisher<List<ByteBuffer>>> response;
-    try {
-      response = (secure ? https : local).send(request, HttpResponse.BodyHandlers.ofPublisher());
-    } catch (InterruptedException _) {
-      Thread.currentThread().interrupt();
-      throw new InterruptedIOException("Interrupted while downloading " + uri);
-    }
+    HttpResponse<Flow.Publisher<List<ByteBuffer>>> response = open(uri);
     Parts body = new Parts();
     response.body().subscribe(body);
     try {
@@ -160,6 +164,71 @@ public final class Downloader {
     } finally {
       body.cancel(); // frees the connection if the body was not read to its end
     }
+  }
+
+  /**
+   * Asks for the file at {@code uri}. A {@link GitHubSource}'s token goes only to its API: where
+   * the API redirects, such as to a CDN, is asked without it.
+   */
+  private HttpResponse<Flow.Publisher<List<ByteBuffer>>> open(URI uri) throws IOException {
+    if (!allowed(uri, uri)) {
+      throw new IOException("Files are downloaded only over https, not from " + uri);
+    }
+    String authorization = source instanceof GitHubSource github ? github.authorization(uri) : null;
+    HttpResponse<Flow.Publisher<List<ByteBuffer>>> response = send(uri, uri, authorization);
+    String location = response.headers().firstValue("location").orElse(null);
+    if (authorization == null || response.statusCode() / 100 != 3 || location == null) {
+      return response;
+    }
+    Parts redirect = new Parts();
+    response.body().subscribe(redirect);
+    redirect.cancel();
+    URI target;
+    try {
+      target = uri.resolve(location);
+    } catch (IllegalArgumentException _) { // whose message would show the address
+      throw new IOException(uri + " redirects to an invalid address");
+    }
+    // Messages name only uri: the target may be an address signed for this one download.
+    if (!allowed(uri, target)) {
+      throw new IOException(uri + " redirects to an address that is not https");
+    }
+    return send(uri, target, null);
+  }
+
+  private HttpResponse<Flow.Publisher<List<ByteBuffer>>> send(
+      URI uri, URI target, String authorization) throws IOException {
+    HttpRequest.Builder request;
+    try {
+      request = HttpRequest.newBuilder(target);
+    } catch (IllegalArgumentException _) { // whose message would show the address
+      throw new IOException("Downloading " + uri + " leads to an address without a host");
+    }
+    request
+        .timeout(TIMEOUT)
+        .header("User-Agent", "rethinkj-updater")
+        // What GitHub's API needs to send the file rather than its description.
+        .header("Accept", "application/octet-stream");
+    if (authorization != null) {
+      request.header("Authorization", authorization);
+    }
+    try {
+      return (authorization == null && secure(target) ? https : local)
+          .send(request.build(), HttpResponse.BodyHandlers.ofPublisher());
+    } catch (InterruptedException _) {
+      Thread.currentThread().interrupt();
+      throw new InterruptedIOException("Interrupted while downloading " + uri);
+    }
+  }
+
+  /** Whether {@code to} may be downloaded, when asked for {@code from}: never from https to http. */
+  private static boolean allowed(URI from, URI to) {
+    return secure(to)
+        || !secure(from) && "http".equalsIgnoreCase(to.getScheme()) && GitHubSource.loopback(to);
+  }
+
+  private static boolean secure(URI uri) {
+    return "https".equalsIgnoreCase(uri.getScheme());
   }
 
   private static HttpClient client(HttpClient.Redirect redirect) {
