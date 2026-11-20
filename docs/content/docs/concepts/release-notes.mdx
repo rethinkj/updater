@@ -5,6 +5,28 @@ description: What changed between two versions, and which versions a channel off
 
 `Update.find` takes the installed version and the releases of a source. If one in the app's channel is newer, it returns an `Update`: `latest()` is the release to update to, and `releases()` lists every release of the channel newer than the installed one, newest first, each with its version, title, date and notes as Markdown. An app that skipped versions so sees everything that changed since, not only the newest notes. Build metadata does not count: `1.0.0+5` is not newer than `1.0.0`.
 
+## Sections
+
+`update.sections()` splits the notes of every release at their Markdown headings and merges them by kind, so that an app can show breaking changes first and then what is new and what is fixed. Each section has its kind, its heading as the newest release wrote it, and its entries as Markdown: the list items without their markers, and its paragraphs. Within a section, the entries of newer releases come first.
+
+```java snippet="sections"
+```
+
+The kinds come in this order, the headings of Keep a Changelog and those that release-please and other tools write for Conventional Commits. A heading is matched regardless of case, emoji and punctuation, so `### ⚠ BREAKING CHANGES` and `### 🐛 Fixes` are recognized.
+
+| Kind | Headings |
+| --- | --- |
+| `BREAKING` | Breaking Changes, Breaking Change, Breaking |
+| `ADDED` | Added, Features, New Features |
+| `CHANGED` | Changed, Performance Improvements, Performance |
+| `DEPRECATED` | Deprecated |
+| `REMOVED` | Removed |
+| `FIXED` | Fixed, Fixes, Bug Fixes |
+| `SECURITY` | Security |
+| `OTHER` | any other heading, and text under none |
+
+Nothing is dropped. A heading of no known kind under one of a known kind, such as Configuration under Breaking Changes, has that kind. Any other heading of no known kind, such as GitHub's New Contributors, is a section of kind `OTHER` with that heading, one for each heading, even with nothing under it. Text before the first heading, notes without headings, and GitHub's **Full Changelog** link go to the `OTHER` section with an empty heading. Only a heading of no known kind with nothing under it but deeper headings, such as GitHub's What's Changed or the version heading of Keep a Changelog, makes no section. `release.sections()` gives the sections of one release, in the order of its notes. Kinds may be added, so a `switch` over them needs a `default`.
+
 ## Channels
 
 `Update.find(installed, releases)` is the stable channel: it offers releases and leaves pre-releases out. `Update.find(installed, releases, "nightly")` offers the releases and also the pre-releases of the `nightly` channel. A pre-release's channel is the first identifier after the `-` in its version, up to the first `.`: `0.2.0-nightly.202611190300` is in `nightly`, `0.2.0-beta.1` in `beta`. Each channel offers only its own pre-releases. A release marked as a pre-release whose version is not one, such as `1.0.0`, is in no channel. Passing `null` as the channel is the same as the stable channel.
@@ -15,4 +37,4 @@ On GitHub each pre-release is a release of its own. `GitHubSource` reads every p
 
 ## Not implemented yet
 
-Notes that use headings such as Added, Fixed and Breaking are meant to be split into those sections, so that an app can, for example, show breaking changes first. A changelog file in the repository may serve instead of per-release notes.
+A changelog file in the repository may serve instead of per-release notes.

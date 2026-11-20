@@ -3,6 +3,7 @@ package com.rethinkj.updater;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.rethinkj.updater.Section.Kind;
 import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -12,12 +13,16 @@ import org.junit.jupiter.api.Test;
 class UpdateTest {
 
   private static Release release(String version, boolean preRelease) {
+    return release(version, preRelease, "Notes of " + version);
+  }
+
+  private static Release release(String version, boolean preRelease, String notes) {
     return new Release(
         Version.parse(version),
         "v" + version,
         "Release " + version,
         Instant.EPOCH,
-        "Notes of " + version,
+        notes,
         preRelease,
         URI.create("https://example.com/" + version),
         List.of());
@@ -72,5 +77,69 @@ class UpdateTest {
     // A pre-release version counts as one even where a source does not mark it.
     List<Release> releases = List.of(release("1.0.0", false), release("2.0.0-rc.1", false));
     assertTrue(Update.find(Version.parse("1.0.0+build.5"), releases).isEmpty());
+  }
+
+  @Test
+  void mergesTheSectionsOfEveryReleaseBreakingChangesFirst() {
+    // googleapis/release-please v17.0.0, as release-please wrote it
+    Release releasePlease = release("2.0.0", false, """
+        ## [17.0.0](https://github.com/googleapis/release-please/compare/v16.18.0...v17.0.0) (2025-03-11)
+
+
+        ### ⚠ BREAKING CHANGES
+
+        * **deps:** update octokit to v20 ([#2490](https://github.com/googleapis/release-please/issues/2490))
+
+        ### Features
+
+        * **deps:** update octokit to v20 ([#2490](https://github.com/googleapis/release-please/issues/2490)) ([9f3b669](https://github.com/googleapis/release-please/commit/9f3b6699474b0ff1987ef3ad4ca5a96ce69d9a6a))
+        """);
+    // Textualize/textual v8.2.6, in the headings of Keep a Changelog
+    Release keepAChangelog = release("1.9.0", false, """
+        Improved text select logic. You can select text without first clicking on a content area.
+
+        May break snapshots without affecting appearance.
+
+        ## [8.2.6] - 2026-04-13
+
+        ### Fixed
+
+        - Fixed selection to the right of code fence blocks (may break some snapshots)
+        - Fixed Markdown code fences losing content when switching themes https://github.com/Textualize/textual/pull/6537
+
+        ### Added
+
+        - Added ability to select outside of text, so the user doesn't need to be quite so precise https://github.com/Textualize/textual/pull/6523
+        """);
+
+    Update update = Update.find(Version.parse("1.0.0"), List.of(keepAChangelog, releasePlease))
+        .orElseThrow();
+
+    assertEquals(
+        List.of(
+            new Section(
+                Kind.BREAKING,
+                "⚠ BREAKING CHANGES",
+                List.of(
+                    "**deps:** update octokit to v20 ([#2490](https://github.com/googleapis/release-please/issues/2490))")),
+            new Section(
+                Kind.ADDED,
+                "Features",
+                List.of(
+                    "**deps:** update octokit to v20 ([#2490](https://github.com/googleapis/release-please/issues/2490)) ([9f3b669](https://github.com/googleapis/release-please/commit/9f3b6699474b0ff1987ef3ad4ca5a96ce69d9a6a))",
+                    "Added ability to select outside of text, so the user doesn't need to be quite so precise https://github.com/Textualize/textual/pull/6523")),
+            new Section(
+                Kind.FIXED,
+                "Fixed",
+                List.of(
+                    "Fixed selection to the right of code fence blocks (may break some snapshots)",
+                    "Fixed Markdown code fences losing content when switching themes https://github.com/Textualize/textual/pull/6537")),
+            new Section(
+                Kind.OTHER,
+                "",
+                List.of(
+                    "Improved text select logic. You can select text without first clicking on a content area.",
+                    "May break snapshots without affecting appearance."))),
+        update.sections());
   }
 }
