@@ -1,5 +1,6 @@
 package com.rethinkj.updater;
 
+import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.WRITE;
 
 import java.io.File;
@@ -8,6 +9,7 @@ import java.io.Reader;
 import java.net.URI;
 import java.net.URL;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryIteratorException;
@@ -56,6 +58,8 @@ public final class Installation {
 
   private static final String RESULT = "result.properties";
   private static final String PLAN = "plan.properties";
+  private static final String BACKUP = "backup.properties";
+  private static final String HELPER_LOCK = "helper.lock";
 
   private final Path app;
   private final Path updates;
@@ -131,6 +135,11 @@ public final class Installation {
    * What the helper reported about the last update, once: the report is deleted as it is read.
    * Empty if there is none, or while a helper is still at work.
    *
+   * <p>If the helper was ended before it reported, as when the user logged off while it waited for
+   * the new version to confirm, this reports in its place: {@link Result.Status#APPLIED} if the new
+   * version is in place, which runs, and then it deletes the old version beside it; else {@link
+   * Result.Status#REJECTED} with the reason {@code failed}, and the old version stays where it is.
+   *
    * <p>Unless a helper is at work, it also deletes the copies of the helper in the update folder.
    * One that Windows still holds open, as the helper exits, is deleted at a later call. What the
    * helper builds beside the app's folder, the helper deletes itself.
@@ -145,9 +154,13 @@ public final class Installation {
       if (Files.exists(file)) {
         result = Optional.of(Result.read(file));
         Files.deleteIfExists(plan); // first: a plan without a result means a helper at work
+        Files.deleteIfExists(updates.resolve(BACKUP));
         Files.delete(file);
       } else if (Files.exists(plan)) {
-        return result; // a helper is at work, or was ended before it could report
+        result = ended(plan);
+        if (result.isEmpty()) {
+          return result; // a helper is at work
+        }
       }
       // As start() names its copies; not a link, nor a junction, which is a directory as well.
       try (DirectoryStream<Path> copies = Files.newDirectoryStream(updates, p -> {
@@ -164,6 +177,75 @@ public final class Installation {
         // Tried again at the next call; also when there is no update folder yet.
       }
       return result;
+    }
+  }
+
+  /**
+   * What became of the update in {@code plan}, whose helper was ended before it reported; empty
+   * while a helper is at work. It deletes the plan, so that this happens once.
+   */
+  private Optional<Result> ended(Path plan) {
+    if (started) {
+      return Optional.empty(); // the helper this process started may not hold the lock yet
+    }
+    Result result = null;
+    Path backup = null;
+    // Held until the plan is deleted, so that no helper starts on it meanwhile.
+    try (FileChannel channel = FileChannel.open(updates.resolve(HELPER_LOCK), CREATE, WRITE);
+        FileLock lock = channel.tryLock()) {
+      // Else at work, or it has just reported, which the next call reads.
+      if (lock != null && !Files.exists(updates.resolve(RESULT))) {
+        backup = backup();
+        Result report = backup == null
+            ? new Result(
+                Result.Status.REJECTED,
+                "failed",
+                "The helper was ended before it reported, so " + app + " may hold either version;"
+                    + " if it holds the new one, the old one may be left beside it as "
+                    + app.getFileName() + ".backup-<n>")
+            : new Result(
+                Result.Status.APPLIED,
+                "",
+                "Replaced " + app + ", which runs the new version; the helper was ended before it"
+                    + " reported");
+        // First: if it fails, nothing has changed, and the next call comes to the same report.
+        Files.delete(plan);
+        result = report;
+      }
+    } catch (IOException | OverlappingFileLockException _) {
+      // As if a helper were at work: it cannot tell, or this process holds the lock, as a test
+      // does. Once the plan is deleted, the report stands.
+    }
+    if (result != null && backup != null) {
+      try {
+        delete(backup); // since the new version runs, as if it had confirmed
+      } catch (IOException _) {
+        // Left beside the app's folder, where it is in the way of nothing, as by the helper.
+      }
+    }
+    return Optional.ofNullable(result);
+  }
+
+  /**
+   * The old version that the helper named in {@code backup.properties}, if it is still beside the
+   * app's folder, which then holds the new one: the helper deletes the file before it puts the old
+   * version back, and the old version only once it has reported. Null if there is no such file, no
+   * such version or no app's folder.
+   */
+  private Path backup() {
+    Properties p = new Properties();
+    try (Reader in = Files.newBufferedReader(updates.resolve(BACKUP), StandardCharsets.UTF_8)) {
+      p.load(in);
+      Path real = app.toRealPath();
+      Path backup = Path.of(p.getProperty("backup", ""));
+      // Only what the helper names so: nothing else is deleted on the word of a file.
+      boolean beside = "1".equals(p.getProperty("format"))
+          && real.getParent().equals(backup.getParent())
+          && backup.getFileName().toString().startsWith(real.getFileName() + ".backup-")
+          && Files.exists(backup, LinkOption.NOFOLLOW_LINKS);
+      return beside ? backup : null;
+    } catch (IOException | IllegalArgumentException _) { // also no such file, or no app
+      return null;
     }
   }
 
@@ -215,7 +297,7 @@ public final class Installation {
         throw new IllegalStateException("A helper already waits for this process to exit");
       }
       // A helper locks it until it has reported, so that its report is not lost to the next one.
-      try (FileChannel lock = FileChannel.open(updates.resolve("helper.lock"), WRITE)) {
+      try (FileChannel lock = FileChannel.open(updates.resolve(HELPER_LOCK), WRITE)) {
         if (lock.tryLock() == null) {
           throw new IllegalStateException("A helper is still at work in " + updates);
         }
@@ -239,6 +321,7 @@ public final class Installation {
     }
     Files.createDirectories(updates);
     Files.deleteIfExists(updates.resolve(RESULT));
+    Files.deleteIfExists(updates.resolve(BACKUP)); // so that it names no backup for this plan
     Path copy = Files.createDirectory(updates.resolve("helper-" + System.currentTimeMillis()));
     try {
       if (java.toRealPath().startsWith(real)) {
@@ -397,7 +480,10 @@ public final class Installation {
       APPLIED,
       /** The old version is back in place. */
       ROLLED_BACK,
-      /** Nothing changed, or the app's folder is missing if the message says so. */
+      /**
+       * Nothing changed, unless the message says that the app's folder is missing, or that the
+       * helper was ended before it reported.
+       */
       REJECTED
     }
 

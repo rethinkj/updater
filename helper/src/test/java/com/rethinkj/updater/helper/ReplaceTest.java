@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -54,10 +55,15 @@ class ReplaceTest {
         "Bücher App-1.3.0/lib/app.jar", "1.3.0",
         "Bücher App-1.3.0/conf/app.properties", "1.3.0");
 
-    Properties result = run(plan(app, "archive", zip, sha256(zip)));
+    Path plan = plan(app, "archive", zip, sha256(zip));
+    Properties result = run(plan);
 
     assertEquals("applied", result.getProperty("status"));
     assertNull(result.getProperty("reason"));
+    // For core, should the helper be ended before the result; core reads it with this key.
+    Properties backup = load(plan.resolveSibling("backup.properties"));
+    assertEquals("1", backup.getProperty("format"));
+    assertTrue(backup.getProperty("backup").startsWith(app + ".backup-"));
     assertEquals("1.3.0", Files.readString(app.resolve("bin/app")));
     assertEquals("1.3.0", Files.readString(app.resolve("lib/app.jar")));
     assertEquals("mine", Files.readString(app.resolve("settings.ini")));
@@ -92,6 +98,40 @@ class ReplaceTest {
     assertEquals("rejected", result.getProperty("status"));
     assertOldVersionAlone(app);
     assertEquals("mine", Files.readString(app.resolve("conf/user.ini")));
+  }
+
+  @Test
+  void namesNoBackupForCoreOnceTheNewVersionFailsToConfirm() throws Exception {
+    Path app = oldVersion();
+    Path zip = zip("Bücher App-1.3.0/bin/app", "1.3.0");
+    Path plan = plan(app, "archive", zip, sha256(zip));
+    Properties restart = load(plan);
+    restart.setProperty("mode", "restart");
+    restart.setProperty("command.0", temp.resolve("no launcher").toString());
+    restart.setProperty("confirm.seconds", "120");
+    try (Writer out = Files.newBufferedWriter(plan, StandardCharsets.UTF_8)) {
+      restart.store(out, null);
+    }
+
+    Properties result = run(plan);
+
+    assertEquals("rolled-back", result.getProperty("status"));
+    assertEquals("not-confirmed", result.getProperty("reason"));
+    assertFalse(Files.exists(plan.resolveSibling("backup.properties")));
+    assertOldVersionAlone(app);
+  }
+
+  @Test
+  void changesNothingWithoutTheLockThatTellsCoreItIsAtWork() throws Exception {
+    Path app = oldVersion();
+    Path zip = zip("Bücher App-1.3.0/bin/app", "1.3.0");
+    Files.createDirectories(temp.resolve("updates/helper.lock")); // a folder cannot be locked
+
+    Properties result = run(plan(app, "archive", zip, sha256(zip)));
+
+    assertEquals("rejected", result.getProperty("status"));
+    assertEquals("failed", result.getProperty("reason"));
+    assertOldVersionAlone(app);
   }
 
   @Test
@@ -235,12 +275,15 @@ class ReplaceTest {
 
   private static Properties run(Path plan) throws IOException {
     Helper.run(plan);
-    Properties result = new Properties();
-    try (Reader in =
-        Files.newBufferedReader(plan.resolveSibling("result.properties"), StandardCharsets.UTF_8)) {
-      result.load(in);
+    return load(plan.resolveSibling("result.properties"));
+  }
+
+  private static Properties load(Path file) throws IOException {
+    Properties p = new Properties();
+    try (Reader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+      p.load(in);
     }
-    return result;
+    return p;
   }
 
   /** The ID of a process that has exited, for the helper not to wait. */

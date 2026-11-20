@@ -21,7 +21,8 @@ import java.util.concurrent.TimeUnit;
  * exited and replaces it. With the plan's mode {@code restart} it starts the new version and waits
  * for {@code confirmed.properties} in the same folder; without it, it puts the old version back
  * and starts that. What it did, it writes into {@code result.properties} in the same folder; it
- * prints nothing.
+ * prints nothing. Once the new version is in place, it names the old one in {@code
+ * backup.properties} there, so that core can finish the update should the helper be ended first.
  *
  * <p>{@code java -jar rethinkj-updater-helper.jar list <folder>} writes the list of the app's own
  * files into a built app's folder, before it is packed.
@@ -30,6 +31,9 @@ public final class Helper {
 
   /** How long the helper tries again to rename a file that another process has open. */
   private static final Duration LOCKED_FOR = Duration.ofSeconds(30);
+
+  /** Names the old version while the new one is in place and has not failed to confirm. */
+  private static final String BACKUP = "backup.properties";
 
   private static final String APPLIED = "applied";
   private static final String REJECTED = "rejected";
@@ -53,14 +57,16 @@ public final class Helper {
     Path folder = file.toAbsolutePath().getParent();
     // Held until the result is written, or the helper is ended: core starts no helper meanwhile.
     FileChannel lock = null; // NOPMD: closed below, after the result
+    IOException unlocked = null;
     try {
       lock = FileChannel.open(
           folder.resolve("helper.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
       lock.lock(); // waits for a helper still at work, which an older core may have started
-    } catch (IOException _) {
-      // Then core cannot tell that this helper is at work.
+    } catch (IOException e) {
+      unlocked = e;
     }
     Plan plan = null;
+    Path backup = null;
     boolean running = false; // whether the version in place runs, started and confirmed
     boolean unconfirmed = false; // whether the version that did not confirm may be in place
     String status = APPLIED;
@@ -69,7 +75,14 @@ public final class Helper {
     try {
       plan = Plan.read(file);
       ProcessHandle.of(plan.pid()).ifPresent(app -> app.onExit().join());
-      Path backup = Replace.apply(plan, LOCKED_FOR);
+      if (unlocked != null) {
+        // Else core could take this helper for one that was ended, and delete the old version.
+        throw new Plan.Rejected("failed", "Cannot lock helper.lock: " + unlocked);
+      }
+      backup = Replace.apply(plan, LOCKED_FOR);
+      // For core to delete, should the helper be ended before it reports; if it cannot be
+      // written, core cannot tell and leaves the old version where it is.
+      write(folder, BACKUP, "backup", backup.toString());
       message = "Replaced " + plan.app() + " with " + plan.file();
       if (plan.mode() == Plan.Mode.RESTART) {
         running = startConfirmed(plan, folder);
@@ -84,9 +97,6 @@ public final class Helper {
               + plan.app() + " holds the old one again";
         }
       }
-      if (status.equals(APPLIED)) {
-        Replace.delete(backup);
-      }
     } catch (Plan.Rejected e) {
       status = REJECTED;
       reason = e.reason;
@@ -100,14 +110,14 @@ public final class Helper {
       reason = "failed";
       message = e.toString();
     }
-    boolean reported = false;
-    try {
-      writeResult(folder, status, reason, message);
-      reported = true;
-    } catch (IOException _) {
-      // Nowhere is left to report it but the exit code.
+    // If it cannot be written, nowhere is left to report it but the exit code.
+    boolean reported =
+        write(folder, "result.properties", "status", status, "reason", reason, "message", message);
+    close(lock); // before the backup is deleted, which may take a while: the helper has reported
+    if (reported && status.equals(APPLIED)) {
+      // Only now: until there is a result, the backup tells core the new version is in place.
+      Replace.delete(backup);
     }
-    close(lock);
     // The version that ran before, once the result is there, which it reads.
     if (reported && plan != null && plan.mode() == Plan.Mode.RESTART && !running && !unconfirmed) {
       startOld(plan, folder);
@@ -147,41 +157,44 @@ public final class Helper {
 
   /**
    * Starts the new version and waits until it writes {@code confirmed.properties}. If it does not
-   * within the plan's time, or exits before, or the helper is interrupted, it ends the new version
-   * and returns false.
+   * within the plan's time, or exits before, or the helper is interrupted, it deletes {@code
+   * backup.properties}, ends the new version and returns false.
    */
   private static boolean startConfirmed(Plan plan, Path folder) {
     Path confirmed = folder.resolve("confirmed.properties");
-    Process app;
-    try {
-      Files.deleteIfExists(confirmed);
-      app = start(plan, folder);
-    } catch (IOException _) {
-      return false; // such as when the new version no longer has the command's launcher
-    }
     // Gathered at every poll: a process that outlives its parent gets another one.
     // shortcut: a child that is started and orphaned within one poll escapes; contain the tree
     // (a job object, a process group) if that shows up, which java.base alone cannot.
-    Set<ProcessHandle> started = new HashSet<>(Set.of(app.toHandle()));
-    long end = System.nanoTime() + plan.confirmWithin().toNanos();
-    while (true) {
-      gather(started);
-      boolean exited = !app.isAlive(); // before the check: it may confirm and then exit
-      if (Files.exists(confirmed)) {
-        return true;
-      }
-      if (exited || System.nanoTime() - end >= 0) {
-        stop(started);
-        return false;
-      }
-      try {
+    Set<ProcessHandle> started = new HashSet<>();
+    try {
+      Files.deleteIfExists(confirmed);
+      Process app = start(plan, folder);
+      started.add(app.toHandle());
+      long end = System.nanoTime() + plan.confirmWithin().toNanos();
+      while (true) {
+        gather(started);
+        boolean exited = !app.isAlive(); // before the check: it may confirm and then exit
+        if (Files.exists(confirmed)) {
+          return true;
+        }
+        if (exited || System.nanoTime() - end >= 0) {
+          break;
+        }
         Thread.sleep(100);
-      } catch (InterruptedException _) {
-        Thread.currentThread().interrupt(); // then it rolls back, as if the version did not confirm
-        stop(started);
-        return false;
       }
+    } catch (IOException _) {
+      // Such as when the new version no longer has the command's launcher.
+    } catch (InterruptedException _) {
+      Thread.currentThread().interrupt(); // then it rolls back, as if the version did not confirm
     }
+    try {
+      // First: should the helper be ended from here on, core must not keep the new version.
+      Files.deleteIfExists(folder.resolve(BACKUP));
+    } catch (IOException _) {
+      // Then core would keep it, but only if the helper were also ended before it reports.
+    }
+    stop(started);
+    return false;
   }
 
   /**
@@ -216,32 +229,36 @@ public final class Helper {
   }
 
   /**
-   * Writes {@code result.properties} of format 1 into {@code folder}, replacing an earlier one.
-   *
-   * @param reason null with the status {@code applied}
+   * Writes the file {@code name} of format 1 into {@code folder}, replacing an earlier one, with
+   * keys and their values in turn, and returns whether it could. A key whose value is null is left
+   * out.
    */
-  static void writeResult(Path folder, String status, String reason, String message)
-      throws IOException {
+  private static boolean write(Path folder, String name, String... keysAndValues) {
     Properties p = new Properties();
     p.setProperty("format", "1");
-    p.setProperty("status", status);
-    if (reason != null) {
-      p.setProperty("reason", reason);
-    }
-    p.setProperty("message", message);
-    Path temp = Files.createTempFile(folder, "result-", ".tmp");
-    try {
-      try (Writer out = Files.newBufferedWriter(temp, StandardCharsets.UTF_8)) {
-        p.store(out, null);
+    for (int i = 0; i < keysAndValues.length; i += 2) {
+      if (keysAndValues[i + 1] != null) {
+        p.setProperty(keysAndValues[i], keysAndValues[i + 1]);
       }
-      // Whole or not at all: the helper may be ended while it writes, when the user logs off.
-      Files.move(
-          temp,
-          folder.resolve("result.properties"),
-          StandardCopyOption.ATOMIC_MOVE,
-          StandardCopyOption.REPLACE_EXISTING);
-    } finally {
-      Files.deleteIfExists(temp);
+    }
+    try {
+      Path temp = Files.createTempFile(folder, name + "-", ".tmp");
+      try {
+        try (Writer out = Files.newBufferedWriter(temp, StandardCharsets.UTF_8)) {
+          p.store(out, null);
+        }
+        // Whole or not at all: the helper may be ended while it writes, when the user logs off.
+        Files.move(
+            temp,
+            folder.resolve(name),
+            StandardCopyOption.ATOMIC_MOVE,
+            StandardCopyOption.REPLACE_EXISTING);
+      } finally {
+        Files.deleteIfExists(temp);
+      }
+      return true;
+    } catch (IOException _) {
+      return false;
     }
   }
 }
