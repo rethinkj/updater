@@ -273,10 +273,16 @@ public final class GitHubSource implements Source {
         && (github || !escapedSeparator(uri.getRawPath()));
   }
 
-  /** Whether the path escapes a dot, slash or backslash, which a proxy may decode into a step up. */
+  /**
+   * Whether the path escapes a dot, slash or backslash, which a proxy may decode into a step up, or
+   * a percent sign, which may escape one of them once more.
+   */
   private static boolean escapedSeparator(String path) {
     String lower = path.toLowerCase(Locale.ROOT);
-    return lower.contains("%2e") || lower.contains("%2f") || lower.contains("%5c");
+    return lower.contains("%2e")
+        || lower.contains("%2f")
+        || lower.contains("%5c")
+        || lower.contains("%25");
   }
 
   /** Whether the host is this machine: {@code localhost} or a loopback IP address, never a name. */
