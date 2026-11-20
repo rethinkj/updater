@@ -88,7 +88,7 @@ public final class ApplyUpdate {
       for (Path file : files) {
         Files.deleteIfExists(file);
       }
-    } catch (IOException | DirectoryIteratorException e) {
+    } catch (IOException | DirectoryIteratorException _) {
       // What is left is deleted after the next update; also when there is no such folder yet.
     }
   }

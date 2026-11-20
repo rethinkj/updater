@@ -3,7 +3,7 @@ title: Package the app
 description: How to build an app image that the helper can update, write its file list and pack it for a release.
 ---
 
-An update is the whole app: the folder that jpackage builds, packed as a tar.gz on Linux and as a zip on Windows. Before it is packed, the folder gets the list of its own files, so that the helper can tell them from files the user keeps there. The first installation can be the same archive, unpacked into a folder the user may write to, such as `%LOCALAPPDATA%\MyApp` or `~/.local/share/MyApp`, so that it has the list too. The example app [`ApplyUpdate`](https://github.com/rethinkj/updater/blob/main/examples/src/test/java/com/rethinkj/updater/examples/docs/ApplyUpdate.java) is listed, packed and updated with these steps in the CI, on both platforms; its test builds the image on a runtime of its own with `--runtime-image`.
+An update is the whole app: the folder that jpackage builds, packed as a tar.gz on Linux and as a zip on Windows. Before it is packed, the folder gets the list of its own files, so that the helper can tell them from files the user keeps there. The first installation can be the same archive, unpacked into a folder the user may write to, such as `%LOCALAPPDATA%\MyApp\app` or `~/.local/share/MyApp/app`, so that it has the list too. The update folder then lies beside it, as `updates` in the same parent folder, not inside the app's folder. The example app [`ApplyUpdate`](https://github.com/rethinkj/updater/blob/main/examples/src/test/java/com/rethinkj/updater/examples/docs/ApplyUpdate.java) is listed, packed and updated with these steps in the CI, on both platforms; its test builds the image on a runtime of its own with `--runtime-image`.
 
 ## Build the image
 
