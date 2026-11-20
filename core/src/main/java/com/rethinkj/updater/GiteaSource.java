@@ -33,8 +33,8 @@ public final class GiteaSource implements Source {
    */
   public GiteaSource(URI instance, String repository, String token) {
     // With a slash at its end, so that an instance below a path keeps it below the API's path.
-    path =
-        Objects.requireNonNullElse(instance.normalize().getRawPath(), "").replaceFirst("/*$", "/");
+    String raw = Objects.requireNonNullElse(instance.normalize().getRawPath(), "");
+    path = raw.endsWith("/") ? raw : raw + "/";
     api = new GitHubSource(instance.resolve(path + "api/v1/"), repository, token, false);
   }
 
