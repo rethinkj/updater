@@ -52,9 +52,9 @@ public final class Downloader {
   private static final long MAX_CHECKSUM_FILE = 1 << 20;
   private static final Pattern CHECKSUM_FILE =
       Pattern.compile("(?i)sha256sums(?:\\.txt)?|.*checksums\\.txt");
-  // As sha256sum writes it: the checksum, a space, and a space or "*" before the file name; or
-  // the checksum alone.
-  private static final Pattern CHECKSUM_LINE = Pattern.compile("([0-9a-fA-F]{64})(?: [ *](.+))?");
+  private static final Pattern CHECKSUM = Pattern.compile("[0-9a-fA-F]{64}");
+  // As sha256sum writes it: the checksum, a space, and a space or "*" before the file name.
+  private static final Pattern CHECKSUM_LINE = Pattern.compile("([0-9a-fA-F]{64}) [ *](.+)");
 
   // Redirects go only from https to https; one from this machine could lead anywhere over http,
   // and one from a request with a token would take the token along.
@@ -146,7 +146,7 @@ public final class Downloader {
 
   /**
    * The checksum {@code sums} lists for {@code asset}, or {@code null}. A checksum without a file
-   * name counts only in the asset's {@code own} file, where it can mean no other.
+   * name counts only as the whole of the asset's {@code own} file, where it can mean no other.
    */
   private String listed(Release release, Asset sums, Asset asset, boolean own) throws IOException {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -156,9 +156,13 @@ public final class Downloader {
         && !reported.equals(HexFormat.of().formatHex(newDigest().digest(out.toByteArray())))) {
       throw new IOException(sums.name() + " of " + release.tag() + " does not match its checksum");
     }
-    for (String line : out.toString(StandardCharsets.UTF_8).lines().toList()) {
+    String text = out.toString(StandardCharsets.UTF_8);
+    if (own && CHECKSUM.matcher(text.strip()).matches()) {
+      return text.strip().toLowerCase(Locale.ROOT);
+    }
+    for (String line : text.lines().toList()) {
       Matcher m = CHECKSUM_LINE.matcher(line.strip());
-      if (m.matches() && (m.group(2) == null ? own : m.group(2).equals(asset.name()))) {
+      if (m.matches() && m.group(2).equals(asset.name())) {
         return m.group(1).toLowerCase(Locale.ROOT);
       }
     }

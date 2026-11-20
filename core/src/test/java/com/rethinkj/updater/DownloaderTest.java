@@ -40,7 +40,8 @@ class DownloaderTest {
   private HttpServer server;
   private String base;
   private final CountDownLatch release = new CountDownLatch(1);
-  private final List<String> tokens = new CopyOnWriteArrayList<>(); // as /app.zip received them
+  // As /app.zip and /own/ received them.
+  private final List<String> tokens = new CopyOnWriteArrayList<>();
 
   @BeforeEach
   void start() throws Exception {
@@ -64,9 +65,11 @@ class DownloaderTest {
         "/own/app.zip.sha256", sha256(APP).toUpperCase(Locale.ROOT) + " *app.zip\n",
         "/own/bare.sha256", sha256(APP) + "\n",
         "/own/other.sha256", sha256(APP) + "  other.zip\n",
+        "/own/mixed.sha256", sha256(APP) + "\n" + sha256(APP) + "  other.zip\n",
         "/own/broken.sha256", sha256(APP).substring(1) + "  app.zip\n",
         "/own/wrong.sha256", "1".repeat(64) + "  app.zip\n");
     server.createContext("/own/", exchange -> {
+      tokens.add(String.valueOf(exchange.getRequestHeaders().getFirst("Authorization")));
       byte[] body = own.get(exchange.getRequestURI().getPath()).getBytes(StandardCharsets.UTF_8);
       exchange.sendResponseHeaders(200, body.length);
       exchange.getResponseBody().write(body);
@@ -146,6 +149,7 @@ class DownloaderTest {
     Map<Release, String> refused = Map.of(
         release(app, file("app.zip.sha256", "other.sha256")), unknown, // names another file
         release(app, file("app.zip.sha256", "broken.sha256")), unknown, // not a SHA-256 checksum
+        release(app, file("app.zip.sha256", "mixed.sha256")), unknown, // alone only if alone
         release(app, file("SHA256SUMS", "bare.sha256")), unknown, // would vouch for every file
         release(app, file("app.zip.sha256", "wrong.sha256"), asset("SHA256SUMS", "")), "disagree");
     refused.forEach((r, expected) -> {
@@ -243,7 +247,7 @@ class DownloaderTest {
     // A file on another host gets no token either.
     Asset elsewhere = new Asset("app.zip", URI.create(cdn + "app.zip"), 0, sha256(APP));
     downloader.download(release(elsewhere), elsewhere, folder, n -> {});
-    assertEquals(List.of("null", "null"), tokens);
+    assertEquals(List.of("null", "null", "null"), tokens); // app.zip.sha256 and app.zip twice
   }
 
   private List<Path> files() {
