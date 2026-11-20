@@ -51,10 +51,10 @@ public record Section(Kind kind, String heading, List<String> entries) {
     }
   }
 
-  private static final Pattern HEADING = Pattern.compile(" {0,3}(#{1,6})[ \t](.*)");
+  private static final Pattern ATX_HEADING = Pattern.compile(" {0,3}(#{1,6})[ \t](.*)");
   // Indented deeper, an item is part of the one above.
   private static final Pattern ITEM = Pattern.compile(" ?(?:[-*+]|\\d{1,9}[.)])[ \t]++(.*)");
-  private static final Pattern FENCE = Pattern.compile(" *(`{3,}|~{3,})[^`]*");
+  private static final Pattern FENCE = Pattern.compile(" *+(`{3,}+|~{3,}+)[^`]*+");
   private static final Pattern SHORTCODE = Pattern.compile(":[\\w+-]+:");
   private static final Pattern NOT_A_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
 
@@ -71,18 +71,6 @@ public record Section(Kind kind, String heading, List<String> entries) {
     return reader.parts.stream()
         .map(p -> new Section(p.kind(), p.heading(), p.entries()))
         .toList();
-  }
-
-  private static Kind kindOf(String heading) {
-    String words = NOT_A_WORD
-        .matcher(SHORTCODE.matcher(heading).replaceAll(" "))
-        .replaceAll(" ")
-        .strip()
-        .toLowerCase(Locale.ROOT);
-    return Arrays.stream(Kind.values())
-        .filter(k -> k.headings.contains(words))
-        .findFirst()
-        .orElse(Kind.OTHER);
   }
 
   /** A section while it is read, its entries still growing; level 0 for text under no heading. */
@@ -108,6 +96,18 @@ public record Section(Kind kind, String heading, List<String> entries) {
       Arrays.fill(above, Kind.OTHER);
     }
 
+    private static Kind kindOf(String heading) {
+      String words = NOT_A_WORD
+          .matcher(SHORTCODE.matcher(heading).replaceAll(" "))
+          .replaceAll(" ")
+          .strip()
+          .toLowerCase(Locale.ROOT);
+      return Arrays.stream(Kind.values())
+          .filter(k -> k.headings.contains(words))
+          .findFirst()
+          .orElse(Kind.OTHER);
+    }
+
     void read(String line) {
       if (fence != null) {
         continueWith(line); // a code block is kept as written
@@ -116,7 +116,7 @@ public record Section(Kind kind, String heading, List<String> entries) {
         }
         return;
       }
-      Matcher heading = HEADING.matcher(line);
+      Matcher heading = ATX_HEADING.matcher(line);
       Matcher item = ITEM.matcher(line);
       if (line.isBlank()) {
         open = null;
