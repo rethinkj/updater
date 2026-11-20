@@ -19,7 +19,6 @@ import java.util.Objects;
 public final class GiteaSource implements Source {
 
   private final GitHubSource api;
-  private final String path;
 
   /**
    * A repository on a Gitea or Forgejo instance.
@@ -35,8 +34,8 @@ public final class GiteaSource implements Source {
   public GiteaSource(URI instance, String repository, String token) {
     // With a slash at its end, so that an instance below a path keeps it below the API's path.
     String raw = Objects.requireNonNullElse(instance.normalize().getRawPath(), "");
-    path = raw.endsWith("/") ? raw : raw + "/";
-    api = new GitHubSource(instance.resolve(path + "api/v1/"), repository, token, false);
+    String path = raw.endsWith("/") ? raw : raw + "/";
+    api = new GitHubSource(instance.resolve(path + "api/v1/"), repository, token, path);
   }
 
   @Override
@@ -44,17 +43,8 @@ public final class GiteaSource implements Source {
     return api.releases();
   }
 
-  /**
-   * The Authorization header for {@code uri}, or {@code null} if there is no token or the address
-   * is not below the instance's, as sent and with dot segments resolved: another app on the same
-   * host must not get it either.
-   */
+  /** The Authorization header for {@code uri}, which only addresses below the instance's get. */
   String authorization(URI uri) {
-    String authorization = api.authorization(uri);
-    return authorization != null
-            && uri.getRawPath().startsWith(path)
-            && uri.normalize().getRawPath().startsWith(path)
-        ? authorization
-        : null;
+    return api.authorization(uri);
   }
 }

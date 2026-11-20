@@ -53,6 +53,7 @@ public final class GitHubSource implements Source {
   private final String token;
   private final boolean github;
   private final String service;
+  private final String scope;
   private final HttpClient http;
 
   /**
@@ -74,15 +75,16 @@ public final class GitHubSource implements Source {
    *     neither https nor on this machine, or {@code token} has characters other than visible ASCII
    */
   public GitHubSource(URI api, String repository, String token) {
-    this(api, repository, token, true);
+    this(api, repository, token, null);
   }
 
   /**
-   * A repository on GitHub, or, with {@code github} false, on a service whose API copies GitHub's,
-   * as Gitea's and Forgejo's do ({@link GiteaSource}): named by its host in messages, and its files
-   * downloaded from where a browser would, also with a token.
+   * A repository on GitHub, or, given {@code instance}, on a service whose API copies GitHub's, as
+   * Gitea's and Forgejo's do ({@link GiteaSource}): named by its host in messages, its files
+   * downloaded from where a browser would, also with a token, and the token sent only below the
+   * path {@code instance}, which ends in a slash.
    */
-  GitHubSource(URI api, String repository, String token, boolean github) {
+  GitHubSource(URI api, String repository, String token, String instance) {
     if (!OWNER_NAME.matcher(repository).matches()) {
       throw new IllegalArgumentException("Not a repository as owner/name: \"" + repository + "\"");
     }
@@ -101,8 +103,9 @@ public final class GitHubSource implements Source {
       throw new IllegalArgumentException(
           "Releases are read only over https or from this machine, not from " + this.api);
     }
-    this.github = github;
+    this.github = instance == null;
     this.service = github ? "GitHub" : this.api.getHost();
+    this.scope = github ? "" : instance;
     // Redirects are followed by hand, so that the token goes only to the API's own origin.
     this.http = HttpClient.newBuilder()
         .connectTimeout(TIMEOUT)
@@ -230,7 +233,7 @@ public final class GitHubSource implements Source {
         });
   }
 
-  /** Where a Link or Location header points, if it is on the API's origin. */
+  /** Where a Link or Location header points, if the token may go there. */
   private URI follow(URI base, String reference) throws IOException {
     URI uri;
     try {
@@ -244,7 +247,7 @@ public final class GitHubSource implements Source {
     return sameOrigin(uri);
   }
 
-  /** The address, if it is on the API's origin: the token must not reach any other. */
+  /** The address, if the token may go there: it must not reach any other. */
   private URI sameOrigin(URI uri) throws IOException {
     if (!onApi(uri)) {
       throw new IOException(service + " pointed to " + uri + ", outside " + api);
@@ -254,7 +257,7 @@ public final class GitHubSource implements Source {
 
   /**
    * The Authorization header for a request to {@code uri}, or {@code null} if there is no token
-   * or the address is not on the API's origin.
+   * or the address is not on the API's origin, or not below the instance's path.
    */
   String authorization(URI uri) {
     return token != null && onApi(uri) ? "Bearer " + token : null;
@@ -263,7 +266,10 @@ public final class GitHubSource implements Source {
   private boolean onApi(URI uri) {
     return api.getScheme().equalsIgnoreCase(String.valueOf(uri.getScheme()))
         && api.getHost().equalsIgnoreCase(String.valueOf(uri.getHost()))
-        && port(api) == port(uri);
+        && port(api) == port(uri)
+        // As sent and with dot segments resolved: another app on the same host must not get it.
+        && uri.getRawPath().startsWith(scope)
+        && uri.normalize().getRawPath().startsWith(scope);
   }
 
   /** Whether the host is this machine: {@code localhost} or a loopback IP address, never a name. */

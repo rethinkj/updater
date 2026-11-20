@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.net.httpserver.HttpServer;
@@ -155,12 +156,27 @@ class GiteaSourceTest {
 
     assertArrayEquals(runner, Files.readAllBytes(file));
     assertEquals("null", authorization.get("storage"));
-    // An instance below a path gets the token there, and another app on the same host does not.
-    GiteaSource below =
-        new GiteaSource(URI.create(base + "forgejo"), "forgejo/forgejo", "test-token");
+  }
+
+  @Test
+  void sendsTheTokenOnlyBelowTheInstancesPath() {
+    // A page that links to another app on the same host, as one of an instance below a path does
+    // when its configured address lacks the path.
+    server.createContext("/forgejo/api/v1/repos/owner/app/releases", exchange -> {
+      String next = base + "api/v1/repos/owner/app/releases?limit=50&page=2";
+      exchange.getResponseHeaders().add("Link", "<" + next + ">; rel=\"next\"");
+      exchange.sendResponseHeaders(200, 2);
+      exchange.getResponseBody().write("[]".getBytes(UTF_8));
+      exchange.close();
+    });
+    GiteaSource below = new GiteaSource(URI.create(base + "forgejo"), "owner/app", "test-token");
+
+    IOException e = assertThrows(IOException.class, below::releases);
+    assertTrue(e.getMessage().contains("outside"), e.getMessage());
+    // Nor does a file there get it, as sent or with its dot segments resolved.
     assertEquals(
         "Bearer test-token",
-        below.authorization(URI.create(base + "forgejo/forgejo/forgejo/releases/download/v1/a")));
+        below.authorization(URI.create(base + "forgejo/owner/app/releases/download/v1/app.zip")));
     assertNull(below.authorization(URI.create(base + "storage/runner")));
     assertNull(below.authorization(URI.create(base + "forgejo/../storage/runner")));
     assertNull(below.authorization(URI.create(base + "storage/../forgejo/runner")));
