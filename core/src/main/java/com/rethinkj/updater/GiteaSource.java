@@ -31,6 +31,7 @@ public final class GiteaSource implements Source {
    * @throws IllegalArgumentException if {@code repository} is not owner/name, {@code instance} is
    *     neither https nor on this machine, or {@code token} has characters other than visible ASCII
    */
+  @SuppressWarnings("java:S1075") // the slash in a URI's path, the same on every platform
   public GiteaSource(URI instance, String repository, String token) {
     // With a slash at its end, so that an instance below a path keeps it below the API's path.
     String raw = Objects.requireNonNullElse(instance.normalize().getRawPath(), "");
