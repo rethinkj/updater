@@ -35,7 +35,9 @@ import tools.jackson.databind.json.JsonMapper;
  * API.
  *
  * <p>Without a token, GitHub allows 60 requests an hour per IP address, and each request reads up
- * to 100 releases. A token raises the limit and lets a private repository be read.
+ * to 100 releases. A token raises the limit and lets a private repository be read. With a token,
+ * an asset's {@link Asset#url() url} is its address in the API, from which a {@link Downloader}
+ * given this source downloads it with the token.
  */
 public final class GitHubSource implements Source {
 
@@ -222,12 +224,24 @@ public final class GitHubSource implements Source {
 
   /** The address, if it is on the API's origin: the token must not reach any other. */
   private URI sameOrigin(URI uri) throws IOException {
-    if (!api.getScheme().equalsIgnoreCase(String.valueOf(uri.getScheme()))
-        || !api.getHost().equalsIgnoreCase(String.valueOf(uri.getHost()))
-        || port(api) != port(uri)) {
+    if (!onApi(uri)) {
       throw new IOException("GitHub pointed to " + uri + ", outside " + api);
     }
     return uri;
+  }
+
+  /**
+   * The Authorization header for a request to {@code uri}, or {@code null} if there is no token
+   * or the address is not on the API's origin.
+   */
+  String authorization(URI uri) {
+    return token != null && onApi(uri) ? "Bearer " + token : null;
+  }
+
+  private boolean onApi(URI uri) {
+    return api.getScheme().equalsIgnoreCase(String.valueOf(uri.getScheme()))
+        && api.getHost().equalsIgnoreCase(String.valueOf(uri.getHost()))
+        && port(api) == port(uri);
   }
 
   /** Whether the host is this machine: {@code localhost} or a loopback IP address, never a name. */
@@ -251,7 +265,7 @@ public final class GitHubSource implements Source {
     return HTTPS.equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
   }
 
-  private static Optional<Release> release(JsonNode node) throws IOException {
+  private Optional<Release> release(JsonNode node) throws IOException {
     if (node.path("draft").asBoolean(false)) {
       return Optional.empty(); // only visible with a token, and not published
     }
@@ -265,9 +279,13 @@ public final class GitHubSource implements Source {
     List<Asset> assets = new ArrayList<>();
     for (JsonNode a : node.path("assets")) {
       String digest = text(a, "digest");
+      long id = a.path("id").asLong(0);
       assets.add(new Asset(
           text(a, "name"),
-          uri(a, "browser_download_url"),
+          // The API serves the files of a private repository as well, and only with the token.
+          token != null && id > 0
+              ? api.resolve("repos/" + repository + "/releases/assets/" + id)
+              : uri(a, "browser_download_url"),
           a.path("size").asLong(0),
           digest.startsWith("sha256:") ? digest.substring(7).toLowerCase(Locale.ROOT) : ""));
     }

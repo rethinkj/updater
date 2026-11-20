@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
@@ -36,12 +38,14 @@ class DownloaderTest {
   private HttpServer server;
   private String base;
   private final CountDownLatch release = new CountDownLatch(1);
+  private final List<String> tokens = new CopyOnWriteArrayList<>(); // as /app.zip received them
 
   @BeforeEach
   void start() throws Exception {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     base = "http://127.0.0.1:" + server.getAddress().getPort() + "/";
     server.createContext("/app.zip", exchange -> {
+      tokens.add(String.valueOf(exchange.getRequestHeaders().getFirst("Authorization")));
       exchange.sendResponseHeaders(200, APP.length);
       exchange.getResponseBody().write(APP);
       exchange.close();
@@ -155,6 +159,45 @@ class DownloaderTest {
       Thread.interrupted();
     }
     assertEquals(List.of(), files());
+  }
+
+  @Test
+  void downloadsAPrivateFileSendingTheTokenOnlyToTheApi() throws IOException {
+    String cdn = base.replace("127.0.0.1", "localhost"); // another host
+    // As GitHub does for a private repository: nothing without the token, and a file only to a
+    // request for its content, as a redirect to its CDN.
+    server.createContext("/api/v3/repos/owner/app/releases", exchange -> {
+      var headers = exchange.getRequestHeaders();
+      String path = exchange.getRequestURI().getPath();
+      if (!"Bearer test-token".equals(headers.getFirst("Authorization"))) {
+        exchange.sendResponseHeaders(404, -1);
+      } else if (path.endsWith("/releases")) {
+        try (InputStream in = getClass().getResourceAsStream("/github/private-releases.json")) {
+          byte[] body = in.readAllBytes();
+          exchange.sendResponseHeaders(200, body.length);
+          exchange.getResponseBody().write(body);
+        }
+      } else if ("application/octet-stream".equals(headers.getFirst("Accept"))) {
+        String file = path.endsWith("/assets/11") ? "app.zip" : "SHA256SUMS";
+        exchange.getResponseHeaders().add("Location", cdn + file);
+        exchange.sendResponseHeaders(302, -1);
+      } else {
+        exchange.sendResponseHeaders(415, -1);
+      }
+      exchange.close();
+    });
+    GitHubSource source = new GitHubSource(URI.create(base + "api/v3"), "owner/app", "test-token");
+    Release latest = source.releases().getFirst();
+    Asset app = latest.asset(Pattern.compile("app\\.zip")).orElseThrow();
+    Downloader downloader = new Downloader(source);
+
+    // Verified with the release's checksum file, which comes through the API as well.
+    Path file = downloader.download(latest, app, folder, n -> {}).file();
+    assertArrayEquals(APP, Files.readAllBytes(file));
+    // A file on another host gets no token either.
+    Asset elsewhere = new Asset("app.zip", URI.create(cdn + "app.zip"), 0, sha256(APP));
+    downloader.download(release(elsewhere), elsewhere, folder, n -> {});
+    assertEquals(List.of("null", "null"), tokens);
   }
 
   private List<Path> files() {

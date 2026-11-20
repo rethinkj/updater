@@ -1,0 +1,1 @@
+- `Downloader` downloads the files of a private GitHub repository: `new Downloader(source)`, given a `GitHubSource` with a token, fetches them through GitHub's API and sends the token only there, never to where the API redirects. With a token, `GitHubSource` reports each asset's API address as its `url()`.
