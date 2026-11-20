@@ -269,7 +269,14 @@ public final class GitHubSource implements Source {
         && port(api) == port(uri)
         // As sent and with dot segments resolved: another app on the same host must not get it.
         && uri.getRawPath().startsWith(scope)
-        && uri.normalize().getRawPath().startsWith(scope);
+        && uri.normalize().getRawPath().startsWith(scope)
+        && (github || !escapedSeparator(uri.getRawPath()));
+  }
+
+  /** Whether the path escapes a dot, slash or backslash, which a proxy may decode into a step up. */
+  private static boolean escapedSeparator(String path) {
+    String lower = path.toLowerCase(Locale.ROOT);
+    return lower.contains("%2e") || lower.contains("%2f") || lower.contains("%5c");
   }
 
   /** Whether the host is this machine: {@code localhost} or a loopback IP address, never a name. */
