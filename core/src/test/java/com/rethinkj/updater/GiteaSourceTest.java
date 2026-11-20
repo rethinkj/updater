@@ -163,6 +163,7 @@ class GiteaSourceTest {
         below.authorization(URI.create(base + "forgejo/forgejo/forgejo/releases/download/v1/a")));
     assertNull(below.authorization(URI.create(base + "storage/runner")));
     assertNull(below.authorization(URI.create(base + "forgejo/../storage/runner")));
+    assertNull(below.authorization(URI.create(base + "storage/../forgejo/runner")));
   }
 
   private static String sha256(byte[] bytes) {

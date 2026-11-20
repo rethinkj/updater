@@ -45,11 +45,14 @@ public final class GiteaSource implements Source {
 
   /**
    * The Authorization header for {@code uri}, or {@code null} if there is no token or the address
-   * is not below the instance's: another app on the same host must not get it either.
+   * is not below the instance's, as sent and with dot segments resolved: another app on the same
+   * host must not get it either.
    */
   String authorization(URI uri) {
     String authorization = api.authorization(uri);
-    return authorization != null && uri.normalize().getRawPath().startsWith(path)
+    return authorization != null
+            && uri.getRawPath().startsWith(path)
+            && uri.normalize().getRawPath().startsWith(path)
         ? authorization
         : null;
   }
